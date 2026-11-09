@@ -83,6 +83,7 @@ def transform(raw: list[tuple[str, dict]]) -> pd.DataFrame:
         "weather_code": "weather_code",
     }
     df_combined = df_combined.rename(columns=rename_mapping)
+    df_combined["observed_at"] = pd.to_datetime(df_combined["observed_at"])
 
     # Add ingestion metadata timestamp
     df_combined["ingested_at_utc"] = ingested_at
@@ -137,7 +138,11 @@ def load(df: pd.DataFrame, db_path: str = "weather.db") -> int:
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
 
-    data_to_insert = [tuple(row) for row in df.itertuples(index=False)]
+    df_to_insert = df.copy()
+    df_to_insert["observed_at"] = df_to_insert["observed_at"].map(
+        lambda value: value.isoformat()
+    )
+    data_to_insert = [tuple(row) for row in df_to_insert.itertuples(index=False)]
 
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
