@@ -30,3 +30,21 @@ def fetch_city(city: dict) -> dict:
     response = requests.get(BASE_URL, params=params, timeout=10)
     response.raise_for_status()
     return response.json()
+
+def save_raw(city_name: str, payload: dict) -> Path:
+    now = datetime.now(timezone.utc)
+    date_folder = now.strftime("%Y-%m-%d")
+    timestamp = now.strftime("%Y%m%dT%H%M%SZ")
+
+    # Create the directory data/raw/YYYY-MM-DD/ if it doesn't exist.
+    folder_path = Path("data") / "raw" / date_folder
+    folder_path.mkdir(parents=True, exist_ok=True)
+
+    clean_city_name = city_name.lower().replace(" ", "_")
+    file_name = f"{clean_city_name}_{timestamp}.json"
+    file_path = folder_path / file_name
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+    return file_path
