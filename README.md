@@ -1,23 +1,37 @@
 # WeatherFlow ETL Pipeline
 
-## Goal
-Build an automated data engineering pipeline to extract live weather data for 5 UK cities from a REST API, store raw JSON extractions with timestamping, clean and transform the dataset using `pandas`, and load the final output into a SQLite database for SQL querying.
+## Project Goal
 
-## How to Set Up (Windows)
+Build an automated data engineering pipeline that extracts live weather data for five UK cities from a REST API, stores timestamped raw JSON extractions, cleans and transforms the data with `pandas`, and loads the results into a SQLite database for SQL querying.
 
-1. **Clone the repository:**
-   ```cmd
-   git clone [https://github.com/](https://github.com/)<your-user>/weatherflow-yasmin-brancaleone.git
-   cd weatherflow-yasmin-brancaleone
+## How to Set Up
 
-2. **Create and activate a virtual environment:**
-    ```cmd
-    python -m venv .venv
-    .venv\Scripts\activate
+### Prerequisites
 
-3. **Install dependencies:**
-    ```cmd
-    pip install -r requirements.txt
+- Python 3.11 or newer
+- Git
+
+### Windows (PowerShell)
+
+1. Clone the repository and move into the project directory:
+
+   ```powershell
+   git clone https://github.com/yasminbrancaleone/weatherflow-yasmincb.git
+   cd weatherflow-yasmincb
+   ```
+
+2. Create and activate a virtual environment:
+
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+3. Install the pinned project dependencies:
+
+   ```powershell
+   python -m pip install -r requirements.txt
+   ```
 
 ## Author
 
