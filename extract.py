@@ -34,20 +34,25 @@ def fetch_city(city: dict) -> dict:
 def save_raw(city_name: str, payload: dict) -> Path:
     now = datetime.now(timezone.utc)
     date_folder = now.strftime("%Y-%m-%d")
-    timestamp = now.strftime("%Y%m%dT%H%M%SZ")
+    timestamp = now.strftime("%Y%m%dT%H%M%S.%fZ")
 
     # Create the directory data/raw/YYYY-MM-DD/ if it doesn't exist.
     folder_path = Path("data") / "raw" / date_folder
     folder_path.mkdir(parents=True, exist_ok=True)
 
     clean_city_name = city_name.lower().replace(" ", "_")
-    file_name = f"{clean_city_name}_{timestamp}.json"
-    file_path = folder_path / file_name
-
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-
-    return file_path
+    suffix = 0
+    while True:
+        collision_suffix = f"_{suffix}" if suffix else ""
+        file_name = f"{clean_city_name}_{timestamp}{collision_suffix}.json"
+        file_path = folder_path / file_name
+        try:
+            with file_path.open("x", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+        except FileExistsError:
+            suffix += 1
+        else:
+            return file_path
 
 def main():
     print("Starting raw weather data extraction...")
