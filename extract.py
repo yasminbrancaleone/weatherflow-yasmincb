@@ -48,3 +48,21 @@ def save_raw(city_name: str, payload: dict) -> Path:
         json.dump(payload, f, indent=2)
 
     return file_path
+
+def main():
+    print("Starting raw weather data extraction...")
+    for city in CITIES:
+        try:
+            payload = fetch_city(city)
+            file_path = save_raw(city["name"], payload)
+            hourly_records = len(payload.get("hourly", {}).get("time", []))
+            print(
+                f"[SUCCESS] {city['name']}: {hourly_records} hourly records"
+                f" saved to {file_path}"
+            )
+        except requests.RequestException as e:
+            print(f"[ERROR] Failed to fetch data for {city['name']}: {e}")
+
+
+if __name__ == "__main__":
+    main()
