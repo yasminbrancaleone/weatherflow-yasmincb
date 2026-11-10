@@ -2,12 +2,14 @@
 
 WeatherFlow is a learning project that collects hourly weather data for five UK cities from the free [Open-Meteo Forecast API](https://open-meteo.com/en/docs), saves the original API responses, transforms them with pandas, and loads them into SQLite for SQL analysis.
 
+**GitHub repository:** [yasminbrancaleone/weatherflow-yasmincb](https://github.com/yasminbrancaleone/weatherflow-yasmincb)
+
 ## Pipeline
 
 1. **Extract:** Request the previous day and forecast from Open-Meteo for London, Manchester, Birmingham, Edinburgh, and Cardiff.
 2. **Land raw data:** Save each complete API response as JSON under `data/raw/<UTC-date>/`.
-3. **Transform:** Flatten the hourly observations, convert `observed_at` to a pandas datetime, standardize column names and units, add the UTC ingestion timestamp, and remove duplicate `(city, observed_at)` rows.
-4. **Load:** Upsert rows into `weather.db` in the `weather_hourly` table. The `(city, observed_at)` primary key makes repeated runs replace existing observations.
+3. **Transform:** Flatten the hourly observations, parse and deduplicate `(city, observed_at)`, standardize column names, and add the UTC ingestion timestamp.
+4. **Load:** Store canonical `YYYY-MM-DDTHH:MM:SS` observation timestamps in `weather.db`. The `(city, observed_at)` primary key makes repeated runs idempotent; existing rows with equivalent timestamp formats are normalized and merged.
 
 The API does not require a key. An internet connection is required to run the extraction.
 
@@ -19,7 +21,9 @@ weatherflow-yasmincb/
 ├── docs/
 │   ├── data_dictionary.md    # Fields, units, and dataset grain
 │   ├── reference_architecture.md
-│   └── reference_critique.md
+│   ├── reference_critique.md
+│   └── reflections/
+│       └── week_1.md         # Week 1 learning reflection
 ├── notebooks/01_explore.ipynb # Exploration and profiling of raw data
 ├── sql/week1_queries.sql     # Example analytical queries
 ├── etl_v1.py                # End-to-end Extract, Transform, Load pipeline
