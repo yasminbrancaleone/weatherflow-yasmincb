@@ -1,25 +1,28 @@
 # WeatherFlow Data Dictionary
 
-## Metadata
-* **Source:** [Open-Meteo Weather Forecast API](https://open-meteo.com/en/docs)
-* **License:** Creative Commons Attribution 4.0 International (CC BY 4.0)
-* **Refresh Frequency:** Hourly
-* **Dataset Grain:** One row per city per hour
+## Dataset metadata
 
----
+- **Source:** [Open-Meteo Forecast API](https://open-meteo.com/en/docs)
+- **Refresh:** Each ETL run requests hourly data for the previous day and forecast.
+- **Database table:** `weather_hourly` in `weather.db`
+- **Grain:** One row per city and observation timestamp.
+- **Primary key:** `(city, observed_at)`
+- **Observation timezone:** `Europe/London`, as returned by the API. The timestamp is stored as local wall time without a timezone offset.
+- **Ingestion timezone:** UTC.
+- **Units:** Open-Meteo's response units are used; the pipeline renames the fields but does not convert the values.
 
-## Field Specifications
+## Loaded fields
 
-| Column | Type | Unit | Description | Example | Nullable? | Source Field |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `time` | string (ISO-8601) | Europe/London local time | Timestamp marking the start of the hourly observation window; loaded as text and converted to datetime only for plotting | `2026-11-10T14:00` | No | `hourly.time` |
-| `city` | string | N/A | Name of the target UK city | `London` | No | Injected pipeline metadata |
-| `latitude` | float | Decimal Degrees | Geographic latitude coordinate of the location | `51.5085` | No | `latitude` |
-| `longitude` | float | Decimal Degrees | Geographic longitude coordinate of the location | `-0.1257` | No | `longitude` |
-| `elevation` | float | Meters | Ground elevation above sea level; defaults to `0.0` if absent from the API payload | `25.0` | No (defaults to `0.0` if absent) | `elevation` (default: `0.0`) |
-| `temperature_2m` | float | °C | Air temperature 2 meters above ground level | `8.4` | Yes | `hourly.temperature_2m` |
-| `relative_humidity_2m` | integer | % | Relative humidity 2 meters above ground level | `82` | Yes | `hourly.relative_humidity_2m` |
-| `apparent_temperature` | float | °C | Perceived "feels-like" temperature combining wind and humidity | `6.1` | Yes | `hourly.apparent_temperature` |
-| `precipitation` | float | mm | Liquid water equivalent precipitation accumulated during the hour | `0.0` | Yes | `hourly.precipitation` |
-| `wind_speed_10m` | float | km/h | Wind speed 10 meters above ground level | `14.2` | Yes | `hourly.wind_speed_10m` |
-| `weather_code` | integer | WMO Code | World Meteorological Organization numerical code for weather condition | `3` | Yes | `hourly.weather_code` |
+| Column | SQLite type | Unit / format | Description | Source | Nullable |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `city` | `TEXT` | City name | UK city associated with the hourly forecast. | Pipeline configuration | No; primary key |
+| `observed_at` | `TEXT` | `YYYY-MM-DDTHH:MM:SS`, Europe/London local time | Start time of the hourly observation/forecast. Stored in a canonical format so equivalent timestamps use the same key. | `hourly.time` | No; primary key |
+| `temperature_c` | `REAL` | °C | Air temperature at 2 m above ground. | `hourly.temperature_2m` | Yes |
+| `feels_like_c` | `REAL` | °C | Apparent temperature. | `hourly.apparent_temperature` | Yes |
+| `humidity_pct` | `INTEGER` | % | Relative humidity at 2 m above ground. | `hourly.relative_humidity_2m` | Yes |
+| `precipitation_mm` | `REAL` | mm | Precipitation accumulated during the hour. | `hourly.precipitation` | Yes |
+| `wind_speed_kmh` | `REAL` | km/h | Wind speed at 10 m above ground. | `hourly.wind_speed_10m` | Yes |
+| `weather_code` | `INTEGER` | WMO code | Weather condition code; see the [Open-Meteo documentation](https://open-meteo.com/en/docs). | `hourly.weather_code` | Yes |
+| `ingested_at_utc` | `TEXT` | ISO-8601 UTC timestamp | Time when this pipeline run transformed the record. | Pipeline metadata | No |
+
+The raw response also contains location metadata such as latitude, longitude, and elevation. Those fields are retained in the JSON files under `data/raw/`; they are not columns in `weather_hourly`.
