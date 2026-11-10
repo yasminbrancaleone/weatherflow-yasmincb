@@ -1,3 +1,4 @@
+from contextlib import closing
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -83,7 +84,9 @@ def transform(raw: list[tuple[str, dict]]) -> pd.DataFrame:
         "weather_code": "weather_code",
     }
     df_combined = df_combined.rename(columns=rename_mapping)
-    df_combined["observed_at"] = pd.to_datetime(df_combined["observed_at"])
+    df_combined["observed_at"] = pd.to_datetime(
+        df_combined["observed_at"], format="mixed"
+    )
 
     # Add ingestion metadata timestamp
     df_combined["ingested_at_utc"] = ingested_at
@@ -107,6 +110,11 @@ def transform(raw: list[tuple[str, dict]]) -> pd.DataFrame:
     ]
 
     return df_combined[columns_order]
+
+
+def canonicalize_observed_at(value: datetime | pd.Timestamp | str) -> str:
+    """Serialize observation timestamps consistently for SQLite keys."""
+    return pd.Timestamp(value).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def load(df: pd.DataFrame, db_path: str = "weather.db") -> int:
@@ -140,13 +148,36 @@ def load(df: pd.DataFrame, db_path: str = "weather.db") -> int:
 
     df_to_insert = df.copy()
     df_to_insert["observed_at"] = df_to_insert["observed_at"].map(
-        lambda value: value.isoformat()
+        canonicalize_observed_at
     )
     data_to_insert = [tuple(row) for row in df_to_insert.itertuples(index=False)]
 
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn, conn:
         cursor = conn.cursor()
         cursor.execute(create_table_sql)
+
+        # Normalize legacy timestamp strings and merge rows that share the same hour.
+        existing_rows = cursor.execute(
+            """
+            SELECT city, observed_at, temperature_c, feels_like_c, humidity_pct,
+                   precipitation_mm, wind_speed_kmh, weather_code, ingested_at_utc
+            FROM weather_hourly
+            ORDER BY ingested_at_utc, observed_at
+            """
+        ).fetchall()
+        latest_by_key = {}
+        for row in existing_rows:
+            normalized_row = (
+                row[0],
+                canonicalize_observed_at(row[1]),
+                *row[2:],
+            )
+            latest_by_key[(normalized_row[0], normalized_row[1])] = normalized_row
+
+        if existing_rows:
+            cursor.execute("DELETE FROM weather_hourly")
+            cursor.executemany(insert_sql, latest_by_key.values())
+
         cursor.executemany(insert_sql, data_to_insert)
         conn.commit()
 
