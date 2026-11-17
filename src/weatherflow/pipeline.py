@@ -1,9 +1,10 @@
 import logging
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from .config import load_config
-from .extract import extract
+from .extract import extract, extract_archive
 from .load import load, load_dimensions
 from .output import (
     write_dq_report,
@@ -18,18 +19,24 @@ from .validate import DataQualityError, validate
 logger = logging.getLogger(__name__)
 
 
-def run(config: dict[str, Any] | None = None) -> int:
-    """Run extraction, transformation, and loading for the weather pipeline."""
-    pipeline_config = config if config is not None else load_config()
-    logger.info("Starting weather pipeline.")
-    raw_data = extract(pipeline_config)
-    transformed_data = transform(raw_data, load_wmo_codes())
+def process_raw_records(
+    raw_records: list[tuple[str, dict[str, Any]]],
+    pipeline_config: dict[str, Any],
+    source: str,
+    run_mode: str = "incremental",
+) -> int:
+    """Transform, validate, and load raw records through one shared path."""
+    if not raw_records:
+        logger.warning("No raw records were provided for processing.")
+        return 0
+
+    transformed_data = transform(raw_records, load_wmo_codes())
 
     try:
         good_rows, quarantined_rows, check_results = validate(
             transformed_data,
             pipeline_config,
-            run_mode="incremental",
+            run_mode=run_mode,
         )
     except DataQualityError:
         logger.exception(
@@ -75,6 +82,45 @@ def run(config: dict[str, Any] | None = None) -> int:
         good_rows,
         pipeline_config["paths"]["database"],
         config=pipeline_config,
+        source=source,
     )
     logger.info("Weather pipeline completed with %d loaded rows.", rows_loaded)
     return rows_loaded
+
+
+def run(config: dict[str, Any] | None = None) -> int:
+    """Run the incremental forecast pipeline."""
+    pipeline_config = config if config is not None else load_config()
+    logger.info("Starting incremental weather pipeline.")
+    raw_data = extract(pipeline_config)
+    return process_raw_records(
+        raw_data,
+        pipeline_config,
+        source="open_meteo_forecast",
+        run_mode="incremental",
+    )
+
+
+def run_backfill(
+    start_date: date,
+    end_date: date,
+    config: dict[str, Any] | None = None,
+) -> int:
+    """Run a historical backfill through the shared pipeline path."""
+    pipeline_config = config if config is not None else load_config()
+    logger.info(
+        "Starting archive backfill from %s through %s.",
+        start_date.isoformat(),
+        end_date.isoformat(),
+    )
+    raw_records = extract_archive(
+        pipeline_config,
+        start_date,
+        end_date,
+    )
+    return process_raw_records(
+        raw_records,
+        pipeline_config,
+        source="open_meteo_archive",
+        run_mode="full",
+    )

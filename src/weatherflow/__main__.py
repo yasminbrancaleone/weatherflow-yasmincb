@@ -3,7 +3,7 @@ import logging
 from collections.abc import Sequence
 from datetime import date, timedelta
 
-from .pipeline import run as run_pipeline
+from .pipeline import run as run_pipeline, run_backfill
 
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             start_date.isoformat(),
             end_date.isoformat(),
         )
-        return 0
+        return run_backfill(start_date, end_date)
 
     raise ValueError(f"Unsupported command: {arguments.command}")
 
