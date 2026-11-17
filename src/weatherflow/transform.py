@@ -8,51 +8,67 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def transform(raw: list[tuple[str, dict[str, Any]]]) -> pd.DataFrame:
-    """Flatten weather payloads, standardize columns, and deduplicate observations."""
-    dataframes = []
-    ingested_at = datetime.now(timezone.utc).isoformat()
+_COLUMN_RENAMES = {
+    "time": "observed_at",
+    "temperature_2m": "temperature_c",
+    "apparent_temperature": "feels_like_c",
+    "relative_humidity_2m": "humidity_pct",
+    "precipitation": "precipitation_mm",
+    "wind_speed_10m": "wind_speed_kmh",
+    "weather_code": "weather_code",
+}
+_OUTPUT_COLUMNS = [
+    "city",
+    "observed_at",
+    "temperature_c",
+    "feels_like_c",
+    "humidity_pct",
+    "precipitation_mm",
+    "wind_speed_kmh",
+    "weather_code",
+    "ingested_at_utc",
+]
 
-    for city_name, payload in raw:
-        dataframe = pd.DataFrame(payload["hourly"])
-        dataframe["city"] = city_name
-        dataframes.append(dataframe)
 
-    if not dataframes:
+def flatten_payload(payload: dict[str, Any], city: str) -> pd.DataFrame:
+    """Flatten one hourly API payload and add its city name."""
+    dataframe = pd.DataFrame(payload["hourly"])
+    dataframe["city"] = city
+    return dataframe
+
+
+def standardise_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """Rename weather columns and parse observation timestamps."""
+    standardised = dataframe.rename(
+        columns=_COLUMN_RENAMES
+    ).copy()
+    standardised["observed_at"] = pd.to_datetime(
+        standardised["observed_at"], format="mixed"
+    )
+    return standardised
+
+
+def deduplicate(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """Keep the latest record for each city and observation timestamp."""
+    return dataframe.drop_duplicates(
+        subset=["city", "observed_at"], keep="last"
+    ).copy()
+
+
+def transform(raw_records: list[tuple[str, dict[str, Any]]]) -> pd.DataFrame:
+    """Transform raw weather records into the canonical hourly dataset."""
+    if not raw_records:
         logger.warning("No raw data available for transformation.")
         return pd.DataFrame()
 
-    combined = pd.concat(dataframes, ignore_index=True)
-    combined = combined.rename(
-        columns={
-            "time": "observed_at",
-            "temperature_2m": "temperature_c",
-            "apparent_temperature": "feels_like_c",
-            "relative_humidity_2m": "humidity_pct",
-            "precipitation": "precipitation_mm",
-            "wind_speed_10m": "wind_speed_kmh",
-            "weather_code": "weather_code",
-        }
-    )
-    combined["observed_at"] = pd.to_datetime(
-        combined["observed_at"], format="mixed"
-    )
-    combined["ingested_at_utc"] = ingested_at
-    combined = combined.drop_duplicates(
-        subset=["city", "observed_at"], keep="last"
-    )
-
-    columns_order = [
-        "city",
-        "observed_at",
-        "temperature_c",
-        "feels_like_c",
-        "humidity_pct",
-        "precipitation_mm",
-        "wind_speed_kmh",
-        "weather_code",
-        "ingested_at_utc",
+    flattened = [
+        flatten_payload(payload, city_name)
+        for city_name, payload in raw_records
     ]
-    transformed = combined[columns_order]
+    combined = pd.concat(flattened, ignore_index=True)
+    transformed = standardise_columns(combined)
+    transformed["ingested_at_utc"] = datetime.now(timezone.utc).isoformat()
+    transformed = deduplicate(transformed)
+
     logger.info("Transformed %d weather observations.", len(transformed))
-    return transformed
+    return transformed[_OUTPUT_COLUMNS]
