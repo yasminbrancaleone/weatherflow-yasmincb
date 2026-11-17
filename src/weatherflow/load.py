@@ -233,16 +233,16 @@ def _build_fact_rows(
     return fact_rows
 
 
-def load(
+def load_with_counts(
     dataframe: pd.DataFrame,
     db_path: Path | str,
     config: dict[str, Any] | None = None,
     source: str = "open-meteo",
-) -> int:
-    """Load fact rows atomically with composite-key upserts."""
+) -> tuple[int, int]:
+    """Load fact rows atomically and return new and updated row counts."""
     if dataframe.empty:
         logger.warning("No data available for loading.")
-        return 0
+        return 0, 0
 
     with closing(sqlite3.connect(db_path)) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -283,6 +283,23 @@ def load(
                     )
 
         fact_rows = _build_fact_rows(dataframe, connection, source)
+        existing_keys = {
+            (row[0], row[1], row[2])
+            for row in connection.execute(
+                """
+                SELECT city_id, observed_at_utc, source
+                FROM fact_weather_hourly
+                WHERE source = ?
+                """,
+                (source,),
+            ).fetchall()
+        }
+        incoming_keys = {
+            (row[0], row[2], row[17])
+            for row in fact_rows
+        }
+        updated_rows = len(incoming_keys.intersection(existing_keys))
+        new_rows = len(incoming_keys.difference(existing_keys))
         upsert_sql = """
             INSERT INTO fact_weather_hourly (
                 city_id, date_id, observed_at_utc, hour_local,
@@ -320,4 +337,20 @@ def load(
     logger.info(
         "Loaded %d fact rows from source %s.", len(fact_rows), source
     )
-    return len(fact_rows)
+    return new_rows, updated_rows
+
+
+def load(
+    dataframe: pd.DataFrame,
+    db_path: Path | str,
+    config: dict[str, Any] | None = None,
+    source: str = "open-meteo",
+) -> int:
+    """Load fact rows atomically and return the processed fact row count."""
+    new_rows, updated_rows = load_with_counts(
+        dataframe,
+        db_path,
+        config,
+        source,
+    )
+    return new_rows + updated_rows

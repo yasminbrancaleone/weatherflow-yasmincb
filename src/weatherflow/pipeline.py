@@ -5,7 +5,7 @@ from typing import Any
 
 from .config import load_config
 from .extract import extract, extract_archive
-from .load import load, load_dimensions
+from .load import load, load_dimensions, load_with_counts
 from .output import (
     write_dq_report,
     write_processed_parquet,
@@ -78,14 +78,19 @@ def process_raw_records(
         good_rows, pipeline_config["paths"]["processed_dir"]
     )
     logger.info("Wrote processed Parquet output to %s.", processed_path)
-    rows_loaded = load(
+    new_rows, updated_rows = load_with_counts(
         good_rows,
         pipeline_config["paths"]["database"],
         config=pipeline_config,
         source=source,
     )
-    logger.info("Weather pipeline completed with %d loaded rows.", rows_loaded)
-    return rows_loaded
+    processed_rows = new_rows + updated_rows
+    logger.info(
+        "Weather pipeline completed: %d new rows, %d updated rows.",
+        new_rows,
+        updated_rows,
+    )
+    return processed_rows
 
 
 def run(config: dict[str, Any] | None = None) -> int:
