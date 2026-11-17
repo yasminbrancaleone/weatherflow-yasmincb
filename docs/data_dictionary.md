@@ -5,11 +5,12 @@
 - **Source:** [Open-Meteo Forecast API](https://open-meteo.com/en/docs)
 - **Refresh:** Each ETL run requests hourly data for the previous day and forecast.
 - **Database table:** `weather_hourly` in `weather.db`
+- **Processed output:** `data/processed/run_date=<YYYY-MM-DD>/part-<timestamp>.parquet`
 - **Grain:** One row per city and observation timestamp.
 - **Primary key:** `(city, observed_at_utc)`
 - **Observation timezone:** The API is requested in UTC. The pipeline derives `Europe/London` timestamps for display and business dates.
 - **Ingestion timezone:** UTC.
-- **Units:** Open-Meteo's response units are used; the pipeline renames the fields but does not convert the values.
+- **Units:** Source units and derived conversions are documented in the field definitions below.
 
 ## Loaded fields
 
