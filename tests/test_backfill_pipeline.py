@@ -70,7 +70,7 @@ def test_incremental_run_uses_forecast_source():
     raw_records = [("London", {"hourly": {"time": []}})]
     config = {"paths": {}}
 
-    with patch.object(pipeline, "extract", return_value=raw_records), patch.object(
+    with patch.object(pipeline, "extract_incremental", return_value=raw_records), patch.object(
         pipeline,
         "process_raw_records",
         return_value=3,

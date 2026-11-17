@@ -37,8 +37,6 @@ weatherflow-yasmincb/
 ├── notebooks/01_explore.ipynb # Exploration and profiling of raw data
 ├── sql/week1_queries.sql     # Example analytical queries
 ├── pyproject.toml
-├── etl_v1.py                # End-to-end Extract, Transform, Load pipeline
-├── extract.py               # Standalone raw API extraction exercise
 ├── requirements.txt
 └── weather.db               # SQLite output (not tracked by Git)
 ```
@@ -83,6 +81,18 @@ From any directory, with the virtual environment active and the package installe
 
 ```powershell
 python -m weatherflow run
+```
+
+Run a 30-day historical backfill ending five days before today:
+
+```powershell
+python -m weatherflow backfill --days 30
+```
+
+The backfill can also use explicit inclusive dates:
+
+```powershell
+python -m weatherflow backfill --start-date 2026-10-01 --end-date 2026-10-30
 ```
 
 The command reads API settings, cities, and output paths from `config.yaml`. Example

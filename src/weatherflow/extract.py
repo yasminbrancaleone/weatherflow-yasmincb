@@ -230,6 +230,92 @@ def extract_archive(
     return payloads
 
 
+def extract_incremental(
+    config: dict[str, Any],
+) -> list[tuple[str, dict[str, Any]]]:
+    """Fetch recent and forecast hours using one city-specific watermark."""
+    api_config = config["api"]
+    raw_directory = Path(config["paths"]["raw_dir"])
+    now = datetime.now(timezone.utc)
+    run_folder = raw_directory / now.strftime("%Y-%m-%d")
+    run_folder.mkdir(parents=True, exist_ok=True)
+
+    payloads = []
+    for city in config["cities"]:
+        window = build_incremental_window(
+            config["paths"]["database"],
+            city["name"],
+            "open_meteo_forecast",
+            past_days=api_config["past_days"],
+            forecast_days=api_config["forecast_days"],
+            now_utc=now,
+        )
+        params = {
+            "latitude": city["latitude"],
+            "longitude": city["longitude"],
+            "hourly": ",".join(api_config["hourly_variables"]),
+            "start_date": window["start_time"].strftime("%Y-%m-%d"),
+            "end_date": window["end_time"].strftime("%Y-%m-%d"),
+            "timezone": api_config["timezone"],
+        }
+        logger.info(
+            "Incremental API window for %s: %s to %s",
+            city["name"],
+            params["start_date"],
+            params["end_date"],
+        )
+        payload = _fetch_payload_from_forecast_window(
+            city,
+            api_config,
+            params,
+        )
+
+        clean_name = city["name"].lower().replace(" ", "_")
+        timestamp = now.strftime("%Y%m%dT%H%M%SZ")
+        file_path = run_folder / f"{clean_name}_{timestamp}.json"
+        with file_path.open("w", encoding="utf-8") as file:
+            json.dump(payload, file, indent=2)
+        payloads.append((city["name"], payload))
+        logger.info("Saved incremental payload to %s", file_path)
+
+    return payloads
+
+
+def _fetch_payload_from_forecast_window(
+    city: dict[str, Any],
+    api_config: dict[str, Any],
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """Fetch an incremental forecast window with the configured retries."""
+    max_retries = api_config["max_retries"]
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(
+                api_config["forecast_url"],
+                params=params,
+                timeout=api_config["timeout_seconds"],
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as error:
+            if not _is_retryable(error) or attempt == max_retries:
+                logger.error(
+                    "Failed incremental extraction for %s: %s",
+                    city["name"],
+                    error,
+                )
+                raise
+            delay = 2**attempt
+            logger.warning(
+                "Retrying incremental extraction for %s after attempt %d/%d",
+                city["name"],
+                attempt + 1,
+                max_retries + 1,
+            )
+            time.sleep(delay)
+    raise RuntimeError("Incremental request retry loop ended unexpectedly.")
+
+
 def extract(config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     """Fetch and save raw weather payloads for every configured city."""
     api_config = config["api"]

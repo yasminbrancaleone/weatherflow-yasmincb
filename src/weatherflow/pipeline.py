@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import load_config
-from .extract import extract, extract_archive
+from .extract import extract_archive, extract_incremental
 from .load import load, load_dimensions, load_with_counts
 from .output import (
     write_dq_report,
@@ -13,7 +13,7 @@ from .output import (
 )
 from .reference import load_wmo_codes
 from .transform import transform
-from .validate import DataQualityError, validate
+from .validate import CheckResult, DataQualityError, validate
 
 
 logger = logging.getLogger(__name__)
@@ -38,9 +38,24 @@ def process_raw_records(
             pipeline_config,
             run_mode=run_mode,
         )
-    except DataQualityError:
+    except DataQualityError as error:
         logger.exception(
             "Blocking data quality failure prevented fact loading."
+        )
+        write_dq_report(
+            [
+                CheckResult(
+                    name="blocking_data_quality_failure",
+                    dimension="validation",
+                    severity="fail",
+                    passed=False,
+                    failed_rows=1,
+                    details=str(error),
+                )
+            ],
+            Path(__file__).resolve().parents[2] / "docs",
+            good_rows=0,
+            quarantined_rows=0,
         )
         raise
 
@@ -97,7 +112,7 @@ def run(config: dict[str, Any] | None = None) -> int:
     """Run the incremental forecast pipeline."""
     pipeline_config = config if config is not None else load_config()
     logger.info("Starting incremental weather pipeline.")
-    raw_data = extract(pipeline_config)
+    raw_data = extract_incremental(pipeline_config)
     return process_raw_records(
         raw_data,
         pipeline_config,
