@@ -12,6 +12,7 @@ api:
     - precipitation
     - wind_speed_10m
     - weather_code
+    - is_day
   timezone: UTC
 
 cities:

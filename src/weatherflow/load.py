@@ -30,6 +30,11 @@ def _create_table(cursor: sqlite3.Cursor) -> None:
             weather_code     INTEGER,
             description      TEXT,
             category         TEXT,
+            temperature_f    REAL,
+            wind_speed_ms    REAL,
+            beaufort_scale   INTEGER,
+            is_daylight      INTEGER,
+            outdoor_work_risk TEXT,
             ingested_at_utc  TEXT   NOT NULL,
             PRIMARY KEY (city, observed_at_utc)
         );
@@ -72,6 +77,11 @@ def _migrate_legacy_rows(
                 *row[2:8],
                 None,
                 None,
+                None,
+                None,
+                None,
+                None,
+                None,
                 row[8],
             )
         )
@@ -88,6 +98,18 @@ def _ensure_reference_columns(cursor: sqlite3.Cursor) -> None:
         cursor.execute("ALTER TABLE weather_hourly ADD COLUMN description TEXT")
     if "category" not in columns:
         cursor.execute("ALTER TABLE weather_hourly ADD COLUMN category TEXT")
+    if "temperature_f" not in columns:
+        cursor.execute("ALTER TABLE weather_hourly ADD COLUMN temperature_f REAL")
+    if "wind_speed_ms" not in columns:
+        cursor.execute("ALTER TABLE weather_hourly ADD COLUMN wind_speed_ms REAL")
+    if "beaufort_scale" not in columns:
+        cursor.execute("ALTER TABLE weather_hourly ADD COLUMN beaufort_scale INTEGER")
+    if "is_daylight" not in columns:
+        cursor.execute("ALTER TABLE weather_hourly ADD COLUMN is_daylight INTEGER")
+    if "outdoor_work_risk" not in columns:
+        cursor.execute(
+            "ALTER TABLE weather_hourly ADD COLUMN outdoor_work_risk TEXT"
+        )
 
 
 def load(df: pd.DataFrame, db_path: Path | str) -> int:
@@ -100,8 +122,9 @@ def load(df: pd.DataFrame, db_path: Path | str) -> int:
     INSERT OR REPLACE INTO weather_hourly (
         city, observed_at_utc, observed_at_local, temperature_c, feels_like_c,
         humidity_pct, precipitation_mm, wind_speed_kmh,
-        weather_code, description, category, ingested_at_utc
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        weather_code, description, category, temperature_f, wind_speed_ms,
+        beaufort_scale, is_daylight, outdoor_work_risk, ingested_at_utc
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
 
     dataframe = df.copy()
@@ -122,7 +145,9 @@ def load(df: pd.DataFrame, db_path: Path | str) -> int:
             """
             SELECT city, observed_at_utc, observed_at_local, temperature_c,
                    feels_like_c, humidity_pct, precipitation_mm, wind_speed_kmh,
-                   weather_code, description, category, ingested_at_utc
+            weather_code, description, category, temperature_f,
+            wind_speed_ms, beaufort_scale, is_daylight, outdoor_work_risk,
+            ingested_at_utc
             FROM weather_hourly
             ORDER BY ingested_at_utc, observed_at_utc
             """

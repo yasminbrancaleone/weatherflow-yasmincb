@@ -29,6 +29,11 @@ _OUTPUT_COLUMNS = [
     "weather_code",
     "description",
     "category",
+    "temperature_f",
+    "wind_speed_ms",
+    "beaufort_scale",
+    "is_daylight",
+    "outdoor_work_risk",
     "ingested_at_utc",
 ]
 
@@ -51,6 +56,7 @@ def standardise_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
     standardised["observed_at_local"] = standardised[
         "observed_at_utc"
     ].dt.tz_convert("Europe/London")
+    standardised["is_day"] = standardised["is_day"].astype("boolean")
     return standardised
 
 
@@ -71,6 +77,50 @@ def add_weather_description(
     return enriched
 
 
+def add_derived_metrics(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """Add unit conversions, Beaufort scale, daylight, and work risk metrics."""
+    derived = dataframe.copy()
+    derived["temperature_f"] = derived["temperature_c"] * 9 / 5 + 32
+    derived["wind_speed_ms"] = derived["wind_speed_kmh"] / 3.6
+    derived["beaufort_scale"] = pd.cut(
+        derived["wind_speed_ms"],
+        bins=[
+            float("-inf"),
+            0.5,
+            1.6,
+            3.4,
+            5.5,
+            8.0,
+            10.8,
+            13.9,
+            17.2,
+            20.8,
+            24.5,
+            28.5,
+            32.7,
+            float("inf"),
+        ],
+        labels=list(range(13)),
+        right=False,
+    ).astype("Int64")
+    derived["is_daylight"] = derived["is_day"]
+
+    high_risk = (
+        derived["beaufort_scale"].ge(7).fillna(False)
+        | derived["category"].isin(["storm", "snow"])
+        | derived["precipitation_mm"].ge(4).fillna(False)
+    )
+    medium_risk = (
+        derived["beaufort_scale"].ge(5).fillna(False)
+        | derived["precipitation_mm"].ge(1).fillna(False)
+        | derived["temperature_c"].le(0).fillna(False)
+    )
+    derived["outdoor_work_risk"] = "low"
+    derived.loc[medium_risk, "outdoor_work_risk"] = "medium"
+    derived.loc[high_risk, "outdoor_work_risk"] = "high"
+    return derived
+
+
 def transform(
     raw_records: list[tuple[str, dict[str, Any]]], wmo_codes: pd.DataFrame
 ) -> pd.DataFrame:
@@ -86,6 +136,7 @@ def transform(
     combined = pd.concat(flattened, ignore_index=True)
     transformed = standardise_columns(combined)
     transformed = add_weather_description(transformed, wmo_codes)
+    transformed = add_derived_metrics(transformed)
     transformed["ingested_at_utc"] = datetime.now(timezone.utc).isoformat()
     transformed = deduplicate(transformed)
 
