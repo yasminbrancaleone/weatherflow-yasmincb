@@ -28,6 +28,8 @@ def _create_table(cursor: sqlite3.Cursor) -> None:
             precipitation_mm REAL,
             wind_speed_kmh   REAL,
             weather_code     INTEGER,
+            description      TEXT,
+            category         TEXT,
             ingested_at_utc  TEXT   NOT NULL,
             PRIMARY KEY (city, observed_at_utc)
         );
@@ -67,12 +69,25 @@ def _migrate_legacy_rows(
                 row[0],
                 canonicalize_observed_at(utc_timestamp),
                 canonicalize_observed_at(local_timestamp),
-                *row[2:],
+                *row[2:8],
+                None,
+                None,
+                row[8],
             )
         )
 
     cursor.executemany(insert_sql, migrated_rows)
     cursor.execute("DROP TABLE weather_hourly_legacy")
+
+
+def _ensure_reference_columns(cursor: sqlite3.Cursor) -> None:
+    columns = {
+        row[1] for row in cursor.execute("PRAGMA table_info(weather_hourly)")
+    }
+    if "description" not in columns:
+        cursor.execute("ALTER TABLE weather_hourly ADD COLUMN description TEXT")
+    if "category" not in columns:
+        cursor.execute("ALTER TABLE weather_hourly ADD COLUMN category TEXT")
 
 
 def load(df: pd.DataFrame, db_path: Path | str) -> int:
@@ -85,8 +100,8 @@ def load(df: pd.DataFrame, db_path: Path | str) -> int:
     INSERT OR REPLACE INTO weather_hourly (
         city, observed_at_utc, observed_at_local, temperature_c, feels_like_c,
         humidity_pct, precipitation_mm, wind_speed_kmh,
-        weather_code, ingested_at_utc
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        weather_code, description, category, ingested_at_utc
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """
 
     dataframe = df.copy()
@@ -102,11 +117,12 @@ def load(df: pd.DataFrame, db_path: Path | str) -> int:
         cursor = connection.cursor()
         _create_table(cursor)
         _migrate_legacy_rows(cursor, insert_sql)
+        _ensure_reference_columns(cursor)
         existing_rows = cursor.execute(
             """
             SELECT city, observed_at_utc, observed_at_local, temperature_c,
                    feels_like_c, humidity_pct, precipitation_mm, wind_speed_kmh,
-                   weather_code, ingested_at_utc
+                   weather_code, description, category, ingested_at_utc
             FROM weather_hourly
             ORDER BY ingested_at_utc, observed_at_utc
             """

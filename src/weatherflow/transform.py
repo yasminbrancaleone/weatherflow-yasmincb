@@ -27,6 +27,8 @@ _OUTPUT_COLUMNS = [
     "precipitation_mm",
     "wind_speed_kmh",
     "weather_code",
+    "description",
+    "category",
     "ingested_at_utc",
 ]
 
@@ -59,7 +61,19 @@ def deduplicate(dataframe: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def transform(raw_records: list[tuple[str, dict[str, Any]]]) -> pd.DataFrame:
+def add_weather_description(
+    dataframe: pd.DataFrame, wmo_codes: pd.DataFrame
+) -> pd.DataFrame:
+    """Join WMO descriptions and categories, using unknown for unmapped codes."""
+    enriched = dataframe.merge(wmo_codes, on="weather_code", how="left")
+    enriched["description"] = enriched["description"].fillna("unknown")
+    enriched["category"] = enriched["category"].fillna("unknown")
+    return enriched
+
+
+def transform(
+    raw_records: list[tuple[str, dict[str, Any]]], wmo_codes: pd.DataFrame
+) -> pd.DataFrame:
     """Transform raw weather records into the canonical hourly dataset."""
     if not raw_records:
         logger.warning("No raw data available for transformation.")
@@ -71,6 +85,7 @@ def transform(raw_records: list[tuple[str, dict[str, Any]]]) -> pd.DataFrame:
     ]
     combined = pd.concat(flattened, ignore_index=True)
     transformed = standardise_columns(combined)
+    transformed = add_weather_description(transformed, wmo_codes)
     transformed["ingested_at_utc"] = datetime.now(timezone.utc).isoformat()
     transformed = deduplicate(transformed)
 
