@@ -23,6 +23,10 @@ def run(config: dict[str, Any] | None = None) -> int:
         transformed_data, pipeline_config["paths"]["processed_dir"]
     )
     logger.info("Wrote processed Parquet output to %s.", processed_path)
-    rows_loaded = load(transformed_data, pipeline_config["paths"]["database"])
+    rows_loaded = load(
+        transformed_data,
+        pipeline_config["paths"]["database"],
+        config=pipeline_config,
+    )
     logger.info("Weather pipeline completed with %d loaded rows.", rows_loaded)
     return rows_loaded
