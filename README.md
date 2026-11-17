@@ -18,14 +18,22 @@ The API does not require a key. An internet connection is required to run the ex
 ```text
 weatherflow-yasmincb/
 ├── data/raw/                 # Date-partitioned raw API responses (not tracked by Git)
+├── config.yaml               # API, city, and output path configuration
 ├── docs/
 │   ├── data_dictionary.md    # Fields, units, and dataset grain
 │   ├── reference_architecture.md
 │   ├── reference_critique.md
 │   └── reflections/
 │       └── week_1.md         # Week 1 learning reflection
+├── src/weatherflow/          # Installable WeatherFlow package
+│   ├── config.py
+│   ├── extract.py
+│   ├── transform.py
+│   ├── load.py
+│   └── pipeline.py
 ├── notebooks/01_explore.ipynb # Exploration and profiling of raw data
 ├── sql/week1_queries.sql     # Example analytical queries
+├── pyproject.toml
 ├── etl_v1.py                # End-to-end Extract, Transform, Load pipeline
 ├── extract.py               # Standalone raw API extraction exercise
 ├── requirements.txt
@@ -48,26 +56,24 @@ cd weatherflow-yasmincb
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 ## Run the Pipeline
 
-From the repository root, with the virtual environment active:
+From any directory, with the virtual environment active and the package installed:
 
 ```powershell
-python etl_v1.py
+python -m weatherflow run
 ```
 
-Example output (the timestamp and row count can vary):
+The command reads API settings, cities, and output paths from `config.yaml`. Example
+output (the timestamp and row count can vary):
 
 ```text
---- STARTING ETL PIPELINE V1 ---
-[EXTRACT] Saved raw payload for London
-[EXTRACT] Saved raw payload for Manchester
-[EXTRACT] Saved raw payload for Birmingham
-[EXTRACT] Saved raw payload for Edinburgh
-[EXTRACT] Saved raw payload for Cardiff
---- ETL COMPLETED: Processed and loaded 240 rows into weather.db ---
+2026-11-17 10:00:00 | INFO | weatherflow.pipeline | Starting weather pipeline.
+2026-11-17 10:00:05 | INFO | weatherflow.load | Loaded 240 weather observations into ...\weather.db.
+2026-11-17 10:00:05 | INFO | weatherflow.pipeline | Weather pipeline completed with 240 loaded rows.
 ```
 
 The raw files and SQLite database are local outputs and are excluded from Git. Re-running the pipeline refreshes rows with the same city and observation time instead of creating duplicate keys.
@@ -80,7 +86,7 @@ The example queries are in [`sql/week1_queries.sql`](sql/week1_queries.sql). To 
 python -c "import sqlite3; conn = sqlite3.connect('weather.db'); cursor = conn.cursor(); [print('\n--- Query Result ---', *cursor.execute(q).fetchall(), sep='\n') for q in open('sql/week1_queries.sql').read().split(';') if q.strip()]"
 ```
 
-This command also works when launched through a VS Code SQLite extension configured to run Python commands. The second query interprets “yesterday” using the computer's local timezone; the API observations use `Europe/London`.
+This command also works when launched through a VS Code SQLite extension configured to run Python commands. The second query interprets “yesterday” using the computer's local timezone; the API observations use UTC.
 
 ## Other Project Materials
 
