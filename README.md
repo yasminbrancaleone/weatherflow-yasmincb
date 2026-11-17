@@ -62,6 +62,21 @@ python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
 
+## Run Tests
+
+Run the complete unit and integration test suite with coverage:
+
+```powershell
+pytest -v --cov=src --cov-report=term-missing
+```
+
+Latest validation summary:
+
+```text
+32 passed
+TOTAL                            424     99    77%
+```
+
 ## Run the Pipeline
 
 From any directory, with the virtual environment active and the package installed:
