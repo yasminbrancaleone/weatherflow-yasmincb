@@ -110,11 +110,10 @@ def validate(
             f"({duplicate_count} affected rows)."
         )
 
-    consistency_mask = data["feels_like_c"].notna() & (
-        data["temperature_c"].notna()
-        & data["feels_like_c"].sub(data["temperature_c"]).abs().gt(
-            dq["feels_like_tolerance_c"]
-        )
+    feels_like = pd.to_numeric(data["feels_like_c"], errors="coerce")
+    temperature = pd.to_numeric(data["temperature_c"], errors="coerce")
+    consistency_mask = feels_like.notna() & temperature.notna() & (
+        feels_like.sub(temperature).abs().gt(dq["feels_like_tolerance_c"])
     )
 
     observed_utc = pd.to_datetime(

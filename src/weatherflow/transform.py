@@ -83,7 +83,7 @@ def add_derived_metrics(dataframe: pd.DataFrame) -> pd.DataFrame:
     derived["temperature_f"] = derived["temperature_c"] * 9 / 5 + 32
     derived["wind_speed_ms"] = derived["wind_speed_kmh"] / 3.6
     derived["beaufort_scale"] = pd.cut(
-        derived["wind_speed_ms"],
+        derived["wind_speed_ms"].round(10),
         bins=[
             float("-inf"),
             0.5,
