@@ -8,8 +8,9 @@ WeatherFlow is a learning project that collects hourly weather data for five UK 
 
 1. **Extract:** Request the previous day and forecast from Open-Meteo for London, Manchester, Birmingham, Edinburgh, and Cardiff.
 2. **Land raw data:** Save each complete API response as JSON under `data/raw/<UTC-date>/`.
-3. **Transform:** Flatten the hourly observations, parse and deduplicate `(city, observed_at)`, standardize column names, and add the UTC ingestion timestamp.
-4. **Load:** Store canonical `YYYY-MM-DDTHH:MM:SS` observation timestamps in `weather.db`. The `(city, observed_at)` primary key makes repeated runs idempotent; existing rows with equivalent timestamp formats are normalized and merged.
+3. **Transform:** Flatten the hourly observations, derive UTC/local timestamps and weather metrics, apply WMO descriptions, and deduplicate by `(city, observed_at_utc)`.
+4. **Process:** Write the transformed observations as Parquet under `data/processed/run_date=<UTC-date>/`.
+5. **Load:** Store the observations in `weather.db`. The `(city, observed_at_utc)` primary key makes repeated runs idempotent.
 
 The API does not require a key. An internet connection is required to run the extraction.
 
@@ -18,6 +19,7 @@ The API does not require a key. An internet connection is required to run the ex
 ```text
 weatherflow-yasmincb/
 ├── data/raw/                 # Date-partitioned raw API responses (not tracked by Git)
+├── data/processed/           # Partitioned Parquet outputs (not tracked by Git)
 ├── config.yaml               # API, city, and output path configuration
 ├── docs/
 │   ├── data_dictionary.md    # Fields, units, and dataset grain
@@ -30,6 +32,7 @@ weatherflow-yasmincb/
 │   ├── extract.py
 │   ├── transform.py
 │   ├── load.py
+│   ├── output.py
 │   └── pipeline.py
 ├── notebooks/01_explore.ipynb # Exploration and profiling of raw data
 ├── sql/week1_queries.sql     # Example analytical queries
@@ -76,7 +79,7 @@ output (the timestamp and row count can vary):
 2026-11-17 10:00:05 | INFO | weatherflow.pipeline | Weather pipeline completed with 240 loaded rows.
 ```
 
-The raw files and SQLite database are local outputs and are excluded from Git. Re-running the pipeline refreshes rows with the same city and observation time instead of creating duplicate keys.
+The raw files, processed Parquet files, and SQLite database are local outputs and are excluded from Git. Re-running the pipeline refreshes rows with the same city and observation time instead of creating duplicate keys.
 
 ## Query the SQLite Database
 
