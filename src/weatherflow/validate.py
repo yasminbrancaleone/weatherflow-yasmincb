@@ -103,6 +103,12 @@ def validate(
     duplicate_mask = data.duplicated(
         subset=["city", "observed_at_utc", "source"], keep=False
     )
+    if duplicate_mask.any():
+        duplicate_count = int(duplicate_mask.sum())
+        raise DataQualityError(
+            "Duplicate (city, observed_at_utc, source) rows are not allowed "
+            f"({duplicate_count} affected rows)."
+        )
 
     consistency_mask = data["feels_like_c"].notna() & (
         data["temperature_c"].notna()
