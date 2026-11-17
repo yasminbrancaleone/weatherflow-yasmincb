@@ -46,3 +46,13 @@ paths:
   processed_dir: data/processed
   quarantine_dir: data/quarantine
   database: data/weather.db
+
+dq:
+  temperature_min_c: -30
+  temperature_max_c: 45
+  humidity_min_pct: 0
+  humidity_max_pct: 100
+  precipitation_min_mm: 0
+  wind_speed_min_kmh: 0
+  feels_like_tolerance_c: 15
+  timeliness_hours: 3

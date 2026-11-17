@@ -76,6 +76,22 @@ def load_config(config_file: Path = CONFIG_FILE) -> dict[str, Any]:
     dim_date = _require_mapping(config.get("dim_date"), "dim_date")
     _require_keys(dim_date, ("start", "end"), "dim_date")
 
+    dq = _require_mapping(config.get("dq"), "dq")
+    _require_keys(
+        dq,
+        (
+            "temperature_min_c",
+            "temperature_max_c",
+            "humidity_min_pct",
+            "humidity_max_pct",
+            "precipitation_min_mm",
+            "wind_speed_min_kmh",
+            "feels_like_tolerance_c",
+            "timeliness_hours",
+        ),
+        "dq",
+    )
+
     paths_config = _require_mapping(config["paths"], "paths")
     if not paths_config:
         raise ConfigurationError("Configuration section 'paths' must not be empty.")
