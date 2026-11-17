@@ -81,6 +81,54 @@ def _fetch_payload(
     raise RuntimeError("Request retry loop ended unexpectedly.")
 
 
+def build_incremental_window(
+    db_path: Path | str,
+    city_name: str,
+    source: str,
+    past_days: int,
+    forecast_days: int,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
+    """Build an incremental API window with a two-hour overlap."""
+    from .load import get_high_water_mark
+
+    current_time = now_utc or datetime.now(timezone.utc)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    else:
+        current_time = current_time.astimezone(timezone.utc)
+
+    end_time = current_time + timedelta(days=forecast_days)
+    high_water_mark = get_high_water_mark(
+        db_path,
+        city_name,
+        source,
+        current_time,
+    )
+    if high_water_mark is not None:
+        start_time = high_water_mark - timedelta(hours=2)
+        window_source = "high-water-mark"
+    else:
+        start_time = current_time - timedelta(days=past_days)
+        window_source = "past-days-fallback"
+
+    if start_time > end_time:
+        raise ValueError("Incremental start time must be before forecast end time.")
+
+    logger.info(
+        "Incremental request window for %s: %s to %s (%s)",
+        city_name,
+        start_time.isoformat(),
+        end_time.isoformat(),
+        window_source,
+    )
+    return {
+        "start_time": start_time,
+        "end_time": end_time,
+        "source": window_source,
+    }
+
+
 def _fetch_archive_payload(
     city: dict[str, Any],
     api_config: dict[str, Any],

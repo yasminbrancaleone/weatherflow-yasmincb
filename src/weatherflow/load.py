@@ -1,7 +1,7 @@
 ## Database schema and dimension/fact loading.
 
 from contextlib import closing
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import logging
 from pathlib import Path
 from typing import Any
@@ -105,6 +105,39 @@ def load_dimensions(
         date_count,
     )
     return city_count, date_count
+
+
+def get_high_water_mark(
+    db_path: Path | str,
+    city_name: str,
+    source: str,
+    now_utc: datetime | None = None,
+) -> datetime | None:
+    """Read the latest loaded past-hour for a city and source."""
+    current_time = now_utc or datetime.now(timezone.utc)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    else:
+        current_time = current_time.astimezone(timezone.utc)
+
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.executescript(SCHEMA_FILE.read_text(encoding="utf-8"))
+        row = connection.execute(
+            """
+            SELECT MAX(observed_at_utc)
+            FROM fact_weather_hourly AS fact
+            JOIN dim_city AS city ON city.city_id = fact.city_id
+            WHERE city.city_name = ?
+              AND fact.source = ?
+              AND fact.observed_at_utc <= ?
+            """,
+            (city_name, source, current_time.isoformat(timespec="seconds")),
+        ).fetchone()
+
+    if row is None or row[0] is None:
+        return None
+    return pd.Timestamp(row[0]).tz_convert("UTC")
 
 
 def _canonical_utc(value: datetime | pd.Timestamp | str) -> str:
