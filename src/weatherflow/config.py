@@ -1,7 +1,11 @@
 from pathlib import Path
+import logging
 from typing import Any
 
 import yaml
+
+
+logger = logging.getLogger(__name__)
 
 
 CONFIG_FILE = Path(__file__).resolve().parents[2] / "config.yaml"

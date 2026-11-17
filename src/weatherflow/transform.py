@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
+import logging
 from typing import Any
 
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
 
 
 def transform(raw: list[tuple[str, dict[str, Any]]]) -> pd.DataFrame:
@@ -15,6 +19,7 @@ def transform(raw: list[tuple[str, dict[str, Any]]]) -> pd.DataFrame:
         dataframes.append(dataframe)
 
     if not dataframes:
+        logger.warning("No raw data available for transformation.")
         return pd.DataFrame()
 
     combined = pd.concat(dataframes, ignore_index=True)
@@ -48,4 +53,6 @@ def transform(raw: list[tuple[str, dict[str, Any]]]) -> pd.DataFrame:
         "weather_code",
         "ingested_at_utc",
     ]
-    return combined[columns_order]
+    transformed = combined[columns_order]
+    logger.info("Transformed %d weather observations.", len(transformed))
+    return transformed

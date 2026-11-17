@@ -1,9 +1,13 @@
 from contextlib import closing
 from datetime import datetime
+import logging
 from pathlib import Path
 
 import pandas as pd
 import sqlite3
+
+
+logger = logging.getLogger(__name__)
 
 
 def canonicalize_observed_at(value: datetime | pd.Timestamp | str) -> str:
@@ -14,6 +18,7 @@ def canonicalize_observed_at(value: datetime | pd.Timestamp | str) -> str:
 def load(df: pd.DataFrame, db_path: Path | str) -> int:
     """Create the weather table and insert rows idempotently."""
     if df.empty:
+        logger.warning("No data available for loading.")
         return 0
 
     create_table_sql = """
@@ -71,4 +76,5 @@ def load(df: pd.DataFrame, db_path: Path | str) -> int:
 
         cursor.executemany(insert_sql, data_to_insert)
 
+    logger.info("Loaded %d weather observations into %s.", len(data_to_insert), db_path)
     return len(data_to_insert)
