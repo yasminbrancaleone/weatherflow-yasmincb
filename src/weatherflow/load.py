@@ -117,6 +117,20 @@ def _canonical_utc(value: datetime | pd.Timestamp | str) -> str:
     return timestamp.isoformat(timespec="seconds")
 
 
+def _optional_int(value: Any) -> int | None:
+    """Convert a nullable pandas scalar to a SQLite-compatible integer."""
+    if value is None or pd.isna(value):
+        return None
+    return int(value)
+
+
+def _optional_bool(value: Any) -> int | None:
+    """Convert a nullable pandas scalar to a SQLite-compatible boolean."""
+    if value is None or pd.isna(value):
+        return None
+    return int(bool(value))
+
+
 def canonicalize_observed_at(value: datetime | pd.Timestamp | str) -> str:
     """Serialize observation timestamps consistently for SQLite keys."""
     return _canonical_utc(value)
@@ -175,8 +189,8 @@ def _build_fact_rows(
                 getattr(row, "description", None),
                 getattr(row, "category", None),
                 getattr(row, "temperature_f", None),
-                getattr(row, "beaufort_scale", None),
-                int(bool(getattr(row, "is_daylight", False))),
+                _optional_int(getattr(row, "beaufort_scale", None)),
+                _optional_bool(getattr(row, "is_daylight", None)),
                 row.outdoor_work_risk,
                 source,
                 _canonical_utc(row.ingested_at_utc),
