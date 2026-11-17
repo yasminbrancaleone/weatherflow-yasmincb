@@ -1,13 +1,103 @@
 from contextlib import closing
-from datetime import datetime
+from datetime import date, datetime, timedelta
 import logging
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import sqlite3
 
 
 logger = logging.getLogger(__name__)
+SCHEMA_FILE = Path(__file__).resolve().parents[2] / "sql" / "schema.sql"
+
+
+def _parse_date(value: date | datetime | str) -> date:
+    """Parse a configured date or date-like value."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value))
+
+
+def _iter_dates(start: date, end: date):
+    """Yield one date at a time from start through end."""
+    current = start
+    while current <= end:
+        yield current
+        current += timedelta(days=1)
+
+
+def load_dimensions(
+    config: dict[str, Any], db_path: Path | str
+) -> tuple[int, int]:
+    """Create schema and upsert configured city and date dimensions."""
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.executescript(SCHEMA_FILE.read_text(encoding="utf-8"))
+
+        with connection:
+            cursor = connection.cursor()
+            cursor.executemany(
+                """
+                INSERT INTO dim_city (city_name, country, latitude, longitude)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(city_name) DO UPDATE SET
+                    country = excluded.country,
+                    latitude = excluded.latitude,
+                    longitude = excluded.longitude
+                """,
+                [
+                    (
+                        city["name"],
+                        city["country"],
+                        city["latitude"],
+                        city["longitude"],
+                    )
+                    for city in config["cities"]
+                ],
+            )
+
+            dim_date = config["dim_date"]
+            date_rows = []
+            for current_date in _iter_dates(
+                _parse_date(dim_date["start"]), _parse_date(dim_date["end"])
+            ):
+                date_rows.append(
+                    (
+                        int(current_date.strftime("%Y%m%d")),
+                        current_date.isoformat(),
+                        current_date.strftime("%A"),
+                        int(current_date.weekday() >= 5),
+                        current_date.month,
+                        current_date.year,
+                    )
+                )
+            cursor.executemany(
+                """
+                INSERT INTO dim_date (
+                    date_id, full_date, day_of_week, is_weekend, month, year
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date_id) DO UPDATE SET
+                    full_date = excluded.full_date,
+                    day_of_week = excluded.day_of_week,
+                    is_weekend = excluded.is_weekend,
+                    month = excluded.month,
+                    year = excluded.year
+                """,
+                date_rows,
+            )
+
+            city_count = cursor.execute("SELECT COUNT(*) FROM dim_city").fetchone()[0]
+            date_count = cursor.execute("SELECT COUNT(*) FROM dim_date").fetchone()[0]
+
+    logger.info(
+        "Loaded %d cities and %d dates into dimension tables.",
+        city_count,
+        date_count,
+    )
+    return city_count, date_count
 
 
 def canonicalize_observed_at(value: datetime | pd.Timestamp | str) -> str:

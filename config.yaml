@@ -17,20 +17,29 @@ api:
 
 cities:
   - name: London
+    country: United Kingdom
     latitude: 51.5085
     longitude: -0.1257
   - name: Manchester
+    country: United Kingdom
     latitude: 53.4808
     longitude: -2.2426
   - name: Birmingham
+    country: United Kingdom
     latitude: 52.4862
     longitude: -1.8904
   - name: Edinburgh
+    country: United Kingdom
     latitude: 55.9533
     longitude: -3.1883
   - name: Cardiff
+    country: United Kingdom
     latitude: 51.4816
     longitude: -3.1791
+
+dim_date:
+  start: 2025-01-01
+  end: 2027-12-31
 
 paths:
   raw_dir: data/raw

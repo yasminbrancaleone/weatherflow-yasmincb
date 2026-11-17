@@ -3,7 +3,7 @@ from typing import Any
 
 from .config import load_config
 from .extract import extract
-from .load import load
+from .load import load, load_dimensions
 from .output import write_processed_parquet
 from .reference import load_wmo_codes
 from .transform import transform
@@ -16,6 +16,7 @@ def run(config: dict[str, Any] | None = None) -> int:
     """Run extraction, transformation, and loading for the weather pipeline."""
     pipeline_config = config if config is not None else load_config()
     logger.info("Starting weather pipeline.")
+    load_dimensions(pipeline_config, pipeline_config["paths"]["database"])
     raw_data = extract(pipeline_config)
     transformed_data = transform(raw_data, load_wmo_codes())
     processed_path = write_processed_parquet(
