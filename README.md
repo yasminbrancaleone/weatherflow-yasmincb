@@ -73,8 +73,8 @@ pytest -v --cov=src --cov-report=term-missing
 Latest validation summary:
 
 ```text
-32 passed
-TOTAL                            424     99    77%
+43 passed
+TOTAL                            551    118    79%
 ```
 
 ## Run the Pipeline
