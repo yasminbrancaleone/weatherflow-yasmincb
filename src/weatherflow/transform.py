@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 _COLUMN_RENAMES = {
-    "time": "observed_at",
+    "time": "observed_at_utc",
     "temperature_2m": "temperature_c",
     "apparent_temperature": "feels_like_c",
     "relative_humidity_2m": "humidity_pct",
@@ -19,7 +19,8 @@ _COLUMN_RENAMES = {
 }
 _OUTPUT_COLUMNS = [
     "city",
-    "observed_at",
+    "observed_at_utc",
+    "observed_at_local",
     "temperature_c",
     "feels_like_c",
     "humidity_pct",
@@ -38,21 +39,24 @@ def flatten_payload(payload: dict[str, Any], city: str) -> pd.DataFrame:
 
 
 def standardise_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """Rename weather columns and parse observation timestamps."""
+    """Rename weather columns and derive UTC and local timestamps."""
     standardised = dataframe.rename(
         columns=_COLUMN_RENAMES
     ).copy()
-    standardised["observed_at"] = pd.to_datetime(
-        standardised["observed_at"], format="mixed"
+    standardised["observed_at_utc"] = pd.to_datetime(
+        standardised["observed_at_utc"], format="mixed", utc=True
     )
+    standardised["observed_at_local"] = standardised[
+        "observed_at_utc"
+    ].dt.tz_convert("Europe/London")
     return standardised
 
 
 def deduplicate(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """Keep the latest record for each city and observation timestamp."""
+    """Keep the latest record for each city and UTC observation timestamp."""
     return dataframe.drop_duplicates(
-        subset=["city", "observed_at"], keep="last"
-    ).copy()
+        subset=["city", "observed_at_utc"], keep="last"
+    ).reset_index(drop=True)
 
 
 def transform(raw_records: list[tuple[str, dict[str, Any]]]) -> pd.DataFrame:
