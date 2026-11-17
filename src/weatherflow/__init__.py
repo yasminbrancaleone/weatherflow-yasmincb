@@ -1,5 +1,3 @@
-"""WeatherFlow data pipeline package."""
-
 import logging
 
 
