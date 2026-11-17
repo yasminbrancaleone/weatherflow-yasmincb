@@ -1,0 +1,36 @@
+api:
+  forecast_url: https://api.open-meteo.com/v1/forecast
+  archive_url: https://archive-api.open-meteo.com/v1/archive
+  timeout_seconds: 10
+  max_retries: 3
+  hourly_variables:
+    - temperature_2m
+    - relative_humidity_2m
+    - apparent_temperature
+    - precipitation
+    - wind_speed_10m
+    - weather_code
+  timezone: UTC
+
+cities:
+  - name: London
+    latitude: 51.5085
+    longitude: -0.1257
+  - name: Manchester
+    latitude: 53.4808
+    longitude: -2.2426
+  - name: Birmingham
+    latitude: 52.4862
+    longitude: -1.8904
+  - name: Edinburgh
+    latitude: 55.9533
+    longitude: -3.1883
+  - name: Cardiff
+    latitude: 51.4816
+    longitude: -3.1791
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  quarantine_dir: data/quarantine
+  database: data/weather.db

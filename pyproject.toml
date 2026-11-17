@@ -5,6 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "weatherflow"
 version = "0.2.0"
+dependencies = [
+    "PyYAML>=6.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
