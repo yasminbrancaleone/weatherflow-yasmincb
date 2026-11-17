@@ -1,10 +1,15 @@
 import logging
+from pathlib import Path
 from typing import Any
 
 from .config import load_config
 from .extract import extract
 from .load import load, load_dimensions
-from .output import write_processed_parquet, write_quarantine
+from .output import (
+    write_dq_report,
+    write_processed_parquet,
+    write_quarantine,
+)
 from .reference import load_wmo_codes
 from .transform import transform
 from .validate import DataQualityError, validate
@@ -41,6 +46,13 @@ def run(config: dict[str, Any] | None = None) -> int:
             "Quarantined %d rows; excluded them from loading.",
             len(quarantined_rows),
         )
+
+    write_dq_report(
+        check_results,
+        Path(__file__).resolve().parents[2] / "docs",
+        good_rows=len(good_rows),
+        quarantined_rows=len(quarantined_rows),
+    )
 
     warned_checks = [result for result in check_results if result.severity == "warn" and not result.passed]
     for result in warned_checks:

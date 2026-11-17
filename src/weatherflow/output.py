@@ -51,3 +51,40 @@ def write_quarantine(
         output_path,
     )
     return output_path
+
+
+def write_dq_report(
+    check_results: list,
+    docs_dir: Path | str,
+    good_rows: int,
+    quarantined_rows: int,
+    run_at: datetime | None = None,
+) -> Path:
+    """Write a Markdown summary of the latest data quality checks."""
+    run_timestamp = run_at or datetime.now(timezone.utc)
+    report_dir = Path(docs_dir) / "dq_reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_path = report_dir / (
+        f"{run_timestamp.strftime('%Y%m%dT%H%M%SZ')}.md"
+    )
+
+    lines = [
+        "# Data Quality Report",
+        "",
+        f"- **Run timestamp (UTC):** {run_timestamp.isoformat()}",
+        f"- **Good rows:** {good_rows}",
+        f"- **Quarantined rows:** {quarantined_rows}",
+        "",
+        "| Check | Dimension | Severity | Status | Failed rows | Details |",
+        "|---|---|---|---|---:|---|",
+    ]
+    for result in check_results:
+        status = "PASS" if result.passed else "FAIL"
+        lines.append(
+            f"| {result.name} | {result.dimension} | {result.severity} | "
+            f"{status} | {result.failed_rows} | {result.details} |"
+        )
+
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    logger.info("Wrote DQ report to %s.", report_path)
+    return report_path
