@@ -18,7 +18,7 @@ _REQUIRED_API_KEYS = (
     "hourly_variables",
     "timezone",
 )
-_REQUIRED_CITY_KEYS = ("name", "latitude", "longitude")
+_REQUIRED_CITY_KEYS = ("name", "country", "latitude", "longitude")
 
 
 class ConfigurationError(ValueError):
@@ -72,6 +72,9 @@ def load_config(config_file: Path = CONFIG_FILE) -> dict[str, Any]:
     for index, city in enumerate(cities):
         city_config = _require_mapping(city, f"cities[{index}]")
         _require_keys(city_config, _REQUIRED_CITY_KEYS, f"cities[{index}]")
+
+    dim_date = _require_mapping(config.get("dim_date"), "dim_date")
+    _require_keys(dim_date, ("start", "end"), "dim_date")
 
     paths_config = _require_mapping(config["paths"], "paths")
     if not paths_config:
