@@ -1,7 +1,9 @@
 from pathlib import Path
 import logging
+import os
 from typing import Any
 
+from dotenv import load_dotenv
 import yaml
 
 
@@ -30,6 +32,18 @@ _REQUIRED_PATH_KEYS = (
 
 class ConfigurationError(ValueError):
     """Raised when the pipeline configuration is missing or invalid."""
+
+
+def load_weatherapi_key() -> str:
+    """Load the WeatherAPI key from the environment or the project .env file."""
+    load_dotenv(dotenv_path=CONFIG_FILE.parent / ".env", override=False)
+    api_key = os.environ.get("WEATHERAPI_KEY", "").strip()
+    if not api_key:
+        raise ConfigurationError(
+            "WEATHERAPI_KEY is required. Set it in the project .env file "
+            "or environment before selecting the WeatherAPI source."
+        )
+    return api_key
 
 
 def _require_mapping(value: Any, section_name: str) -> dict[str, Any]:
