@@ -1,6 +1,5 @@
 import logging
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 from .config import load_config
@@ -53,7 +52,7 @@ def process_raw_records(
                     details=str(error),
                 )
             ],
-            Path(__file__).resolve().parents[2] / "docs",
+            pipeline_config["paths"]["dq_report_dir"],
             good_rows=0,
             quarantined_rows=0,
         )
@@ -71,7 +70,7 @@ def process_raw_records(
 
     write_dq_report(
         check_results,
-        Path(__file__).resolve().parents[2] / "docs",
+        pipeline_config["paths"]["dq_report_dir"],
         good_rows=len(good_rows),
         quarantined_rows=len(quarantined_rows),
     )

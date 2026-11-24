@@ -19,6 +19,13 @@ _REQUIRED_API_KEYS = (
     "timezone",
 )
 _REQUIRED_CITY_KEYS = ("name", "country", "latitude", "longitude")
+_REQUIRED_PATH_KEYS = (
+    "raw_dir",
+    "processed_dir",
+    "quarantine_dir",
+    "dq_report_dir",
+    "database",
+)
 
 
 class ConfigurationError(ValueError):
@@ -95,6 +102,7 @@ def load_config(config_file: Path = CONFIG_FILE) -> dict[str, Any]:
     paths_config = _require_mapping(config["paths"], "paths")
     if not paths_config:
         raise ConfigurationError("Configuration section 'paths' must not be empty.")
+    _require_keys(paths_config, _REQUIRED_PATH_KEYS, "paths")
 
     absolute_paths: dict[str, Path] = {}
     for key, value in paths_config.items():

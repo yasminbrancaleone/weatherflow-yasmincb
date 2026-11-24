@@ -45,6 +45,7 @@ paths:
   raw_dir: data/raw
   processed_dir: data/processed
   quarantine_dir: data/quarantine
+  dq_report_dir: docs/dq_reports
   database: data/weather.db
 
 dq:

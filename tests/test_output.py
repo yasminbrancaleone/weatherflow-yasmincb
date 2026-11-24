@@ -63,11 +63,13 @@ def test_write_dq_report_creates_markdown_summary(tmp_path):
         )
     ]
     run_at = datetime(2026, 11, 17, 12, 30, tzinfo=timezone.utc)
+    report_dir = tmp_path / "dq_reports"
 
-    output = write_dq_report(results, tmp_path, 5, 1, run_at)
+    output = write_dq_report(results, report_dir, 5, 1, run_at)
     report = output.read_text(encoding="utf-8")
 
     assert output.exists()
+    assert output.parent == report_dir
     assert "- **Good rows:** 5" in report
     assert "- **Quarantined rows:** 1" in report
     assert "| temperature_range | validity | quarantine | FAIL | 1 |" in report

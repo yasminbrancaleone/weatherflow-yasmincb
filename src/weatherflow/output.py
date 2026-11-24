@@ -55,14 +55,14 @@ def write_quarantine(
 
 def write_dq_report(
     check_results: list,
-    docs_dir: Path | str,
+    report_dir: Path | str,
     good_rows: int,
     quarantined_rows: int,
     run_at: datetime | None = None,
 ) -> Path:
     """Write a Markdown summary of the latest data quality checks."""
     run_timestamp = run_at or datetime.now(timezone.utc)
-    report_dir = Path(docs_dir) / "dq_reports"
+    report_dir = Path(report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
     report_path = report_dir / (
         f"{run_timestamp.strftime('%Y%m%dT%H%M%SZ')}.md"
