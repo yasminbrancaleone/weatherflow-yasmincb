@@ -1,6 +1,6 @@
 # WeatherFlow ETL Pipeline
 
-WeatherFlow is a learning project that collects hourly weather data for five UK cities from the free [Open-Meteo Forecast API](https://open-meteo.com/en/docs) and [WeatherAPI.com](https://www.weatherapi.com/), saves the original API responses, transforms them with pandas, and loads them into SQLite for SQL analysis.
+WeatherFlow is a learning project that collects hourly weather data for five UK cities from the free [Open-Meteo Forecast API](https://open-meteo.com/en/docs) and [WeatherAPI.com](https://www.weatherapi.com/), saves the original API responses, transforms them with pandas, and loads them into a PostgreSQL 18 warehouse for SQL analysis. SQLite remains available as a local fallback when `DATABASE_URL` is unset.
 
 **GitHub repository:** [yasminbrancaleone/weatherflow-yasmincb](https://github.com/yasminbrancaleone/weatherflow-yasmincb)
 
@@ -10,7 +10,7 @@ WeatherFlow is a learning project that collects hourly weather data for five UK 
 2. **Land raw data:** Save each complete API response as JSON under `data/raw/<UTC-date>/`.
 3. **Transform and validate:** Normalize both providers to the canonical hourly columns, apply each provider's weather-code reference, deduplicate by `(city, observed_at_utc, source)`, and warn when same-city/hour temperatures differ by more than the configured 3 °C threshold.
 4. **Process:** Write the transformed observations as Parquet under `data/processed/run_date=<UTC-date>/`.
-5. **Load:** Store the observations in `weather.db`. The `(city, observed_at_utc, source)` primary key makes repeated runs idempotent while keeping both providers' records.
+5. **Load:** Upsert observations into PostgreSQL's `fact_weather_hourly` table when `DATABASE_URL` is set. The `(city_id, observed_at_utc, source)` primary key makes repeated runs idempotent while keeping both providers' records. The dimensions and facts are loaded in one transaction.
 
 Open-Meteo does not require a key. WeatherAPI.com uses `WEATHERAPI_KEY` from `.env`; the key is never written to raw payload files or application logs. An internet connection is required to run extraction.
 
@@ -22,6 +22,7 @@ weatherflow-yasmincb/
 ├── data/processed/           # Partitioned Parquet outputs (not tracked by Git)
 ├── config.yaml               # API, city, and output path configuration
 ├── .env.example              # Environment variable template (fake values only)
+├── docker-compose.yml         # PostgreSQL 18 warehouse
 ├── docs/
 │   ├── data_dictionary.md    # Fields, units, and dataset grain
 │   ├── reference_architecture.md
@@ -36,7 +37,9 @@ weatherflow-yasmincb/
 │   ├── output.py
 │   └── pipeline.py
 ├── notebooks/01_explore.ipynb # Exploration and profiling of raw data
-├── sql/week1_queries.sql     # Example analytical queries
+├── sql/
+│   ├── analysis_queries.sql   # PostgreSQL analytical queries
+│   └── schema_postgres.sql    # Warehouse star schema
 ├── pyproject.toml
 ├── requirements.txt
 └── weather.db               # SQLite output (not tracked by Git)
@@ -48,6 +51,7 @@ weatherflow-yasmincb/
 
 - Python 3.11 or newer
 - Git
+- Docker Desktop with Docker Compose
 - Internet access for the Open-Meteo API
 
 ### Windows (PowerShell)
@@ -62,22 +66,39 @@ python -m pip install -e .
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and replace the example value with your own WeatherAPI.com key. The `.env` file is ignored by Git.
+Edit `.env`: set your WeatherAPI.com key and replace the sample PostgreSQL password.
+Keep `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `DATABASE_URL` consistent;
+`DATABASE_URL` should connect to `localhost:5433`. Then start the warehouse:
+
+```powershell
+docker compose up -d warehouse
+docker compose ps
+```
+
+Wait until `warehouse` reports `healthy`. The named volume preserves warehouse data
+across `docker compose down` and `docker compose up`; `docker compose down -v` also
+deletes that data. The `.env` file is ignored by Git.
 
 ## Run Tests
 
-Run the complete unit and integration test suite with coverage:
+With the warehouse running, set the integration-test URL to match the credentials
+in `.env` and run the complete suite with coverage:
 
 ```powershell
+$env:WEATHERFLOW_TEST_DATABASE_URL = "postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5433/<POSTGRES_DB>"
 pytest -v --cov=src --cov-report=term-missing
+Remove-Item Env:WEATHERFLOW_TEST_DATABASE_URL
 ```
 
 Latest validation summary:
 
 ```text
-43 passed
-TOTAL                            551    118    79%
+64 passed
+TOTAL                            793    124    84%
 ```
+
+The PostgreSQL integration tests are skipped if `WEATHERFLOW_TEST_DATABASE_URL` is
+not set. URL-encode special characters in the password when building the connection URL.
 
 ## Run the Pipeline
 
@@ -106,33 +127,37 @@ The backfill can also use explicit inclusive dates:
 python -m weatherflow backfill --start-date 2026-10-01 --end-date 2026-10-30
 ```
 
-The command reads API settings, cities, and output paths from `config.yaml`. Example
-output (the timestamp and row count can vary):
+The command reads API settings, cities, and output paths from `config.yaml`, and the
+warehouse connection from `.env`. Example output (timestamps and row counts vary):
 
 ```text
 2026-11-17 10:00:00 | INFO | weatherflow.pipeline | Starting weather pipeline.
-2026-11-17 10:00:05 | INFO | weatherflow.load | Loaded 240 weather observations into ...\weather.db.
-2026-11-17 10:00:05 | INFO | weatherflow.pipeline | Weather pipeline completed with 240 loaded rows.
+2026-11-17 10:00:05 | INFO | weatherflow.postgres | PostgreSQL load from source open_meteo_forecast: 120 new rows, 0 updated rows.
+2026-11-17 10:00:05 | INFO | weatherflow.pipeline | Weather pipeline completed: 120 new rows, 0 updated rows.
 ```
 
-The raw files, processed Parquet files, and SQLite database are local outputs and are excluded from Git. Re-running the pipeline refreshes rows with the same city and observation time instead of creating duplicate keys.
+The raw files, processed Parquet files, and local SQLite database are excluded from
+Git. Re-running the pipeline refreshes rows with the same city, observation time,
+and source instead of creating duplicate keys.
 
-## Query the SQLite Database
+## Query the PostgreSQL Warehouse
 
-The example queries are in [`sql/week1_queries.sql`](sql/week1_queries.sql). To run them from the repository root using Python's built-in SQLite module:
+The five PostgreSQL analysis queries are in [`sql/analysis_queries.sql`](sql/analysis_queries.sql).
+Run them from the repository root with the project's psycopg dependency:
 
 ```powershell
-python -c "import sqlite3; conn = sqlite3.connect('weather.db'); cursor = conn.cursor(); [print('\n--- Query Result ---', *cursor.execute(q).fetchall(), sep='\n') for q in open('sql/week1_queries.sql').read().split(';') if q.strip()]"
+python -c "from weatherflow.config import get_database_url; import psycopg; conn = psycopg.connect(get_database_url()); [print('\n--- Query Result ---', *conn.execute(q).fetchall(), sep='\n') for q in open('sql/analysis_queries.sql', encoding='utf-8').read().split(';') if q.strip()]; conn.close()"
 ```
 
-This command also works when launched through a VS Code SQLite extension configured to run Python commands. The second query interprets “yesterday” using the computer's local timezone; the API observations use UTC.
+`get_database_url()` reads `DATABASE_URL` from `.env`. Start the warehouse and run
+the pipeline at least once before querying it.
 
 ## Other Project Materials
 
 - [`notebooks/01_explore.ipynb`](notebooks/01_explore.ipynb) profiles and visualizes the raw hourly data.
 - [`docs/data_dictionary.md`](docs/data_dictionary.md) documents the explored dataset's columns and units.
 - [`src/weatherflow/reference/weatherapi_codes.csv`](src/weatherflow/reference/weatherapi_codes.csv) maps WeatherAPI condition codes to the project's weather categories.
-- [`sql/week1_queries.sql`](sql/week1_queries.sql) contains queries for coverage, yesterday's average temperature, and the five windiest observations.
+- [`sql/analysis_queries.sql`](sql/analysis_queries.sql) contains five PostgreSQL queries for data coverage, latest-date temperature, strongest winds, and weekday/weekend wind comparisons.
 
 ## Author
 

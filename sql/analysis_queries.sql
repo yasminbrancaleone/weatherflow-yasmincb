@@ -15,7 +15,7 @@ ORDER BY city.city_name;
 -- Business question: What was the average temperature profile for the latest UK date?
 SELECT
     city.city_name,
-    ROUND(AVG(fact.temperature_c), 2) AS avg_temperature_c
+    ROUND(AVG(fact.temperature_c)::numeric, 2) AS avg_temperature_c
 FROM fact_weather_hourly AS fact
 JOIN dim_city AS city
     ON city.city_id = fact.city_id
@@ -50,10 +50,10 @@ LIMIT 5;
 SELECT
     date.is_weekend,
     CASE date.is_weekend
-        WHEN 1 THEN 'Weekend'
+        WHEN TRUE THEN 'Weekend'
         ELSE 'Weekday'
     END AS day_type,
-    ROUND(AVG(fact.wind_speed_ms), 2) AS avg_wind_speed_ms
+    ROUND(AVG(fact.wind_speed_ms)::numeric, 2) AS avg_wind_speed_ms
 FROM fact_weather_hourly AS fact
 JOIN dim_date AS date
     ON date.date_id = fact.date_id
@@ -66,10 +66,10 @@ SELECT
     city.city_name,
     date.is_weekend,
     CASE date.is_weekend
-        WHEN 1 THEN 'Weekend'
+        WHEN TRUE THEN 'Weekend'
         ELSE 'Weekday'
     END AS day_type,
-    ROUND(AVG(fact.wind_speed_ms), 2) AS avg_wind_speed_ms
+    ROUND(AVG(fact.wind_speed_ms)::numeric, 2) AS avg_wind_speed_ms
 FROM fact_weather_hourly AS fact
 JOIN dim_city AS city
     ON city.city_id = fact.city_id

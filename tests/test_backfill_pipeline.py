@@ -241,6 +241,7 @@ def test_process_raw_records_includes_cross_source_check_in_dq_report(
         "load_wmo_codes",
         lambda: pd.DataFrame(),
     )
+    monkeypatch.setattr(pipeline, "get_database_url", lambda: None)
     monkeypatch.setattr(
         pipeline,
         "transform",
@@ -283,3 +284,54 @@ def test_process_raw_records_includes_cross_source_check_in_dq_report(
 
     assert processed_rows == 1
     assert report_results == [additional_check]
+
+
+def test_process_raw_records_uses_postgres_when_database_url_is_configured(
+    monkeypatch,
+    tmp_path,
+):
+    """PostgreSQL loads dimensions and facts through one warehouse loader."""
+    config = {
+        "paths": {
+            "dq_report_dir": tmp_path / "dq_reports",
+            "quarantine_dir": tmp_path / "quarantine",
+            "processed_dir": tmp_path / "processed",
+            "database": tmp_path / "weather.db",
+        }
+    }
+    monkeypatch.setattr(pipeline, "get_database_url", lambda: "postgresql://test")
+    monkeypatch.setattr(pipeline, "load_wmo_codes", lambda: pd.DataFrame())
+    monkeypatch.setattr(
+        pipeline,
+        "transform",
+        lambda *args, **kwargs: pd.DataFrame({"temperature_c": [10.0]}),
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "validate",
+        lambda *args, **kwargs: (
+            pd.DataFrame({"temperature_c": [10.0]}),
+            pd.DataFrame(),
+            [],
+        ),
+    )
+    monkeypatch.setattr(pipeline, "write_dq_report", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        pipeline,
+        "write_processed_parquet",
+        lambda *args, **kwargs: "processed.parquet",
+    )
+    monkeypatch.setattr(pipeline, "load_dimensions", lambda *args: pytest.fail())
+    monkeypatch.setattr(
+        pipeline,
+        "load_postgres_with_counts",
+        lambda *args, **kwargs: (4, 1),
+    )
+
+    processed_rows = pipeline.process_raw_records(
+        [("London", {"hourly": {}})],
+        config,
+        source="open_meteo_forecast",
+    )
+
+    assert processed_rows == 5

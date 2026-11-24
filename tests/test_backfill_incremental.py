@@ -49,6 +49,44 @@ def test_incremental_window_without_data_uses_past_days(tmp_path):
     )
 
 
+def test_incremental_window_uses_postgres_high_water_mark(monkeypatch):
+    """A PostgreSQL URL routes watermark reads to the PostgreSQL loader."""
+    now = datetime(2026, 11, 17, 12, 0, tzinfo=timezone.utc)
+    high_water_mark = datetime(2026, 11, 17, 10, 0, tzinfo=timezone.utc)
+    calls = []
+
+    def fake_get_high_water_mark(database_url, city_name, source, current_time):
+        calls.append((database_url, city_name, source, current_time))
+        return high_water_mark
+
+    monkeypatch.setattr(
+        "weatherflow.postgres.get_high_water_mark",
+        fake_get_high_water_mark,
+    )
+
+    window = build_incremental_window(
+        "postgresql://weatherflow:example@localhost:5433/weatherflow",
+        "London",
+        "open_meteo_forecast",
+        past_days=1,
+        forecast_days=1,
+        now_utc=now,
+    )
+
+    assert calls == [
+        (
+            "postgresql://weatherflow:example@localhost:5433/weatherflow",
+            "London",
+            "open_meteo_forecast",
+            now,
+        )
+    ]
+    assert window["source"] == "high-water-mark"
+    assert window["start_time"] == datetime(
+        2026, 11, 17, 8, 0, tzinfo=timezone.utc
+    )
+
+
 def test_high_water_mark_ignores_future_forecast_rows(tmp_path):
     """The watermark uses only past and current rows, not forecast rows."""
     database = tmp_path / "weather.db"

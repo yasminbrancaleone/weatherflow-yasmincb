@@ -48,6 +48,19 @@ def load_weatherapi_key() -> str:
     return api_key
 
 
+def get_database_url() -> str | None:
+    """Load and validate the optional PostgreSQL connection URL."""
+    load_dotenv(dotenv_path=CONFIG_FILE.parent / ".env", override=False)
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if not database_url:
+        return None
+    if not database_url.startswith(("postgresql://", "postgres://")):
+        raise ConfigurationError(
+            "DATABASE_URL must use the postgresql:// or postgres:// scheme."
+        )
+    return database_url
+
+
 def _require_mapping(value: Any, section_name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ConfigurationError(
