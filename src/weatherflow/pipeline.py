@@ -2,7 +2,7 @@ import logging
 from datetime import date
 from typing import Any
 
-from .config import load_config, load_weatherapi_key
+from .config import get_database_url, load_config, load_weatherapi_key
 from .extract import extract_archive, extract_incremental, extract_weatherapi
 from .load import load, load_dimensions, load_with_counts
 from .output import (
@@ -10,6 +10,7 @@ from .output import (
     write_processed_parquet,
     write_quarantine,
 )
+from .postgres import load_with_counts as load_postgres_with_counts
 from .reference import load_weatherapi_codes, load_wmo_codes
 from .transform import normalise_records, transform
 from .validate import (
@@ -106,19 +107,38 @@ def process_raw_records(
         logger.warning("No good rows remain after data quality validation.")
         return 0
 
-    load_dimensions(pipeline_config, pipeline_config["paths"]["database"])
+    database_url = get_database_url()
+    if database_url is None:
+        logger.info(
+            "Using SQLite database at %s.",
+            pipeline_config["paths"]["database"],
+        )
+        load_dimensions(
+            pipeline_config,
+            pipeline_config["paths"]["database"],
+        )
+    else:
+        logger.info("Using the PostgreSQL warehouse from DATABASE_URL.")
     processed_path = write_processed_parquet(
         good_rows,
         pipeline_config["paths"]["processed_dir"],
         suffix=source,
     )
     logger.info("Wrote processed Parquet output to %s.", processed_path)
-    new_rows, updated_rows = load_with_counts(
-        good_rows,
-        pipeline_config["paths"]["database"],
-        config=pipeline_config,
-        source=source,
-    )
+    if database_url is None:
+        new_rows, updated_rows = load_with_counts(
+            good_rows,
+            pipeline_config["paths"]["database"],
+            config=pipeline_config,
+            source=source,
+        )
+    else:
+        new_rows, updated_rows = load_postgres_with_counts(
+            good_rows,
+            database_url,
+            config=pipeline_config,
+            source=source,
+        )
     processed_rows = new_rows + updated_rows
     logger.info(
         "Weather pipeline completed: %d new rows, %d updated rows.",

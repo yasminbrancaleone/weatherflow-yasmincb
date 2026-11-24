@@ -191,7 +191,11 @@ def build_incremental_window(
     now_utc: datetime | None = None,
 ) -> dict[str, Any]:
     """Build an incremental API window with a two-hour overlap."""
-    from .load import get_high_water_mark
+    database_reference = str(db_path)
+    if database_reference.startswith(("postgresql://", "postgres://")):
+        from .postgres import get_high_water_mark
+    else:
+        from .load import get_high_water_mark
 
     current_time = now_utc or datetime.now(timezone.utc)
     if current_time.tzinfo is None:
@@ -308,7 +312,12 @@ def extract_incremental(
     config: dict[str, Any],
 ) -> list[tuple[str, dict[str, Any]]]:
     """Fetch recent and forecast hours using one city-specific watermark."""
+    from .config import get_database_url
+
     api_config = config["api"]
+    database_reference = (
+        get_database_url() or config["paths"]["database"]
+    )
     raw_directory = Path(config["paths"]["raw_dir"])
     now = datetime.now(timezone.utc)
     run_folder = raw_directory / now.strftime("%Y-%m-%d")
@@ -317,7 +326,7 @@ def extract_incremental(
     payloads = []
     for city in config["cities"]:
         window = build_incremental_window(
-            config["paths"]["database"],
+            database_reference,
             city["name"],
             "open_meteo_forecast",
             past_days=api_config["past_days"],
