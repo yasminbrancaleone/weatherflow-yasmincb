@@ -22,9 +22,24 @@ def clean_weather_row():
     }
 
 
+def complete_weather_rows(clean_weather_row):
+    """Create one valid row for every configured city."""
+    configured_cities = [
+        "London",
+        "Manchester",
+        "Birmingham",
+        "Edinburgh",
+        "Cardiff",
+    ]
+    return [
+        {**clean_weather_row, "city": city}
+        for city in configured_cities
+    ]
+
+
 def test_clean_dataframe_passes_all_checks(clean_weather_row):
     """A complete valid row produces no quarantine or blocking failure."""
-    dataframe = pd.DataFrame([clean_weather_row])
+    dataframe = pd.DataFrame(complete_weather_rows(clean_weather_row))
 
     good_rows, quarantined_rows, results = validate(
         dataframe,
@@ -32,15 +47,31 @@ def test_clean_dataframe_passes_all_checks(clean_weather_row):
         run_mode="incremental",
     )
 
-    assert len(good_rows) == 1
+    assert len(good_rows) == 5
     assert quarantined_rows.empty
     assert len(results) == 8
 
 
+def test_incremental_run_requires_every_configured_city(clean_weather_row):
+    """Incremental runs enforce city coverage for every observed hour."""
+    dataframe = pd.DataFrame([clean_weather_row])
+
+    with pytest.raises(
+        DataQualityError,
+        match="configured_city_hour_coverage: 4 failed rows",
+    ):
+        validate(
+            dataframe,
+            load_config(),
+            run_mode="incremental",
+        )
+
+
 def test_temperature_99_is_quarantined_with_correct_reason(clean_weather_row):
     """A 99 C reading is quarantined for the temperature range check."""
-    clean_weather_row["temperature_c"] = 99.0
-    dataframe = pd.DataFrame([clean_weather_row])
+    rows = complete_weather_rows(clean_weather_row)
+    rows[0]["temperature_c"] = 99.0
+    dataframe = pd.DataFrame(rows)
 
     good_rows, quarantined_rows, _ = validate(
         dataframe,
@@ -48,7 +79,7 @@ def test_temperature_99_is_quarantined_with_correct_reason(clean_weather_row):
         run_mode="incremental",
     )
 
-    assert good_rows.empty
+    assert len(good_rows) == 4
     assert len(quarantined_rows) == 1
     assert (
         quarantined_rows.loc[quarantined_rows.index[0], "dq_failure_reason"]
@@ -58,8 +89,9 @@ def test_temperature_99_is_quarantined_with_correct_reason(clean_weather_row):
 
 def test_missing_required_field_is_quarantined(clean_weather_row):
     """A missing required field is quarantined."""
-    clean_weather_row["temperature_c"] = None
-    dataframe = pd.DataFrame([clean_weather_row])
+    rows = complete_weather_rows(clean_weather_row)
+    rows[0]["temperature_c"] = None
+    dataframe = pd.DataFrame(rows)
 
     good_rows, quarantined_rows, _ = validate(
         dataframe,
@@ -67,7 +99,7 @@ def test_missing_required_field_is_quarantined(clean_weather_row):
         run_mode="incremental",
     )
 
-    assert good_rows.empty
+    assert len(good_rows) == 4
     assert len(quarantined_rows) == 1
     assert "missing_required_field" in quarantined_rows.iloc[0]["dq_failure_reason"]
 
@@ -78,8 +110,9 @@ def test_missing_required_field_is_quarantined(clean_weather_row):
 )
 def test_humidity_outside_range_is_quarantined(clean_weather_row, humidity):
     """Humidity below 0 or above 100 is quarantined."""
-    clean_weather_row["humidity_pct"] = humidity
-    dataframe = pd.DataFrame([clean_weather_row])
+    rows = complete_weather_rows(clean_weather_row)
+    rows[0]["humidity_pct"] = humidity
+    dataframe = pd.DataFrame(rows)
 
     _, quarantined_rows, _ = validate(
         dataframe,
@@ -100,8 +133,9 @@ def test_humidity_outside_range_is_quarantined(clean_weather_row, humidity):
 )
 def test_negative_measurement_is_quarantined(clean_weather_row, column, reason):
     """Negative precipitation and wind readings are quarantined."""
-    clean_weather_row[column] = -1.0
-    dataframe = pd.DataFrame([clean_weather_row])
+    rows = complete_weather_rows(clean_weather_row)
+    rows[0][column] = -1.0
+    dataframe = pd.DataFrame(rows)
 
     _, quarantined_rows, _ = validate(
         dataframe,

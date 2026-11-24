@@ -133,7 +133,7 @@ def validate(
         names=["city", "observed_hour"],
     )
     missing_pairs = city_hour_pairs.difference(actual_pairs)
-    coverage_failed = int(len(missing_pairs)) if run_mode == "full" else 0
+    coverage_failed = int(len(missing_pairs))
 
     now = datetime.now(timezone.utc)
     past_or_current = observed_utc[observed_utc <= now]
@@ -193,9 +193,7 @@ def validate(
             failed_rows=coverage_failed,
             details=(
                 "Every configured city must have a row for every observed hour "
-                "in a full run."
-                if run_mode == "full"
-                else "Full-run coverage check is not required for incremental runs."
+                "in the requested window."
             ),
         ),
         CheckResult(
