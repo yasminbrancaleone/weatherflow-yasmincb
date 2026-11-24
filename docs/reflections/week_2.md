@@ -53,9 +53,12 @@ deterministically to Beaufort 7.
 | Incremental watermarks | Confident |
 | Pull request and code review workflow | In progress |
 
-## Next steps
+## D2.6 validation evidence
 
-Before the final review, I will merge the Task 2.6 pull request and complete one
-code-review exchange. I will also run a short real backfill or incremental request,
-record the resulting row counts, and retain only reproducible local outputs in the
-ignored `data/` directory.
+I ran the 30-day backfill for 2026-10-21 through 2026-11-19 twice:
+
+- First run: 840 new rows and 2,760 updated rows (3,600 observations processed).
+- Second run: 0 new rows and 3,600 updated rows (3,600 observations processed).
+
+The database contained 4,800 fact rows after the two runs. The second run confirms
+idempotent loading and a stable 3,600-row backfill result.
