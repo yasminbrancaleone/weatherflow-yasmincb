@@ -1,7 +1,10 @@
 from pathlib import Path
 import logging
+import math
+import os
 from typing import Any
 
+from dotenv import load_dotenv
 import yaml
 
 
@@ -13,6 +16,7 @@ CONFIG_FILE = Path(__file__).resolve().parents[2] / "config.yaml"
 _REQUIRED_API_KEYS = (
     "forecast_url",
     "archive_url",
+    "weatherapi_forecast_url",
     "timeout_seconds",
     "max_retries",
     "hourly_variables",
@@ -30,6 +34,18 @@ _REQUIRED_PATH_KEYS = (
 
 class ConfigurationError(ValueError):
     """Raised when the pipeline configuration is missing or invalid."""
+
+
+def load_weatherapi_key() -> str:
+    """Load the WeatherAPI key from the environment or the project .env file."""
+    load_dotenv(dotenv_path=CONFIG_FILE.parent / ".env", override=False)
+    api_key = os.environ.get("WEATHERAPI_KEY", "").strip()
+    if not api_key:
+        raise ConfigurationError(
+            "WEATHERAPI_KEY is required. Set it in the project .env file "
+            "or environment before selecting the WeatherAPI source."
+        )
+    return api_key
 
 
 def _require_mapping(value: Any, section_name: str) -> dict[str, Any]:
@@ -94,10 +110,22 @@ def load_config(config_file: Path = CONFIG_FILE) -> dict[str, Any]:
             "precipitation_min_mm",
             "wind_speed_min_kmh",
             "feels_like_tolerance_c",
+            "cross_source_temperature_tolerance_c",
             "timeliness_hours",
         ),
         "dq",
     )
+    cross_source_tolerance = dq["cross_source_temperature_tolerance_c"]
+    if (
+        isinstance(cross_source_tolerance, bool)
+        or not isinstance(cross_source_tolerance, (int, float))
+        or not math.isfinite(cross_source_tolerance)
+        or cross_source_tolerance < 0
+    ):
+        raise ConfigurationError(
+            "'dq.cross_source_temperature_tolerance_c' must be a "
+            "finite non-negative number."
+        )
 
     paths_config = _require_mapping(config["paths"], "paths")
     if not paths_config:

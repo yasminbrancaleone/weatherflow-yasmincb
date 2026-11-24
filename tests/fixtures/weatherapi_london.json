@@ -1,0 +1,81 @@
+{
+  "location": {
+    "name": "London",
+    "tz_id": "Europe/London"
+  },
+  "forecast": {
+    "forecastday": [
+      {
+        "date": "2026-11-24",
+        "hour": [
+          {
+            "time_epoch": 1795478400,
+            "time": "2026-11-24 00:00",
+            "temp_c": 8.1,
+            "feelslike_c": 6.4,
+            "humidity": 82,
+            "precip_mm": 0.0,
+            "wind_kph": 9.0,
+            "is_day": 0,
+            "condition": {"text": "Partly cloudy", "code": 1003}
+          },
+          {
+            "time_epoch": 1795482000,
+            "time": "2026-11-24 01:00",
+            "temp_c": 7.9,
+            "feelslike_c": 6.2,
+            "humidity": 83,
+            "precip_mm": 0.0,
+            "wind_kph": 8.6,
+            "is_day": 0,
+            "condition": {"text": "Partly cloudy", "code": 1003}
+          },
+          {
+            "time_epoch": 1795485600,
+            "time": "2026-11-24 02:00",
+            "temp_c": 7.7,
+            "feelslike_c": 5.9,
+            "humidity": 84,
+            "precip_mm": 0.0,
+            "wind_kph": 8.3,
+            "is_day": 0,
+            "condition": {"text": "Cloudy", "code": 1006}
+          },
+          {
+            "time_epoch": 1795489200,
+            "time": "2026-11-24 03:00",
+            "temp_c": 7.5,
+            "feelslike_c": 5.7,
+            "humidity": 85,
+            "precip_mm": 0.0,
+            "wind_kph": 8.0,
+            "is_day": 0,
+            "condition": {"text": "Cloudy", "code": 1006}
+          },
+          {
+            "time_epoch": 1795492800,
+            "time": "2026-11-24 04:00",
+            "temp_c": 7.3,
+            "feelslike_c": 5.4,
+            "humidity": 86,
+            "precip_mm": 0.0,
+            "wind_kph": 7.6,
+            "is_day": 0,
+            "condition": {"text": "Mist", "code": 1030}
+          },
+          {
+            "time_epoch": 1795496400,
+            "time": "2026-11-24 05:00",
+            "temp_c": 7.1,
+            "feelslike_c": 5.2,
+            "humidity": 87,
+            "precip_mm": 0.0,
+            "wind_kph": 7.2,
+            "is_day": 0,
+            "condition": {"text": "Mist", "code": 1030}
+          }
+        ]
+      }
+    ]
+  }
+}
