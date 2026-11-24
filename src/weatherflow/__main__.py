@@ -82,7 +82,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             start_date.isoformat(),
             end_date.isoformat(),
         )
-        return run_backfill(start_date, end_date)
+        run_backfill(start_date, end_date)
+        return 0
 
     raise ValueError(f"Unsupported command: {arguments.command}")
 

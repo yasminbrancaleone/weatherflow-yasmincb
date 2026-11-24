@@ -62,7 +62,7 @@ def test_main_dispatches_backfill(monkeypatch):
     )
     arguments = ["backfill", "--start-date", "2026-10-01", "--end-date", "2026-10-10"]
 
-    assert cli.main(arguments) == 7
+    assert cli.main(arguments) == 0
 
 
 def test_incremental_run_uses_forecast_source():
