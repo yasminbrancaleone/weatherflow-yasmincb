@@ -104,6 +104,26 @@ def normalise_weatherapi_payload(
     return normalized
 
 
+def normalise_records(
+    raw_records: list[tuple[str, dict[str, Any]]],
+    source: str,
+) -> pd.DataFrame:
+    """Normalise raw records for one source into the shared column format."""
+    if not raw_records:
+        return pd.DataFrame()
+
+    normalise = (
+        normalise_weatherapi_payload
+        if source == "weatherapi_forecast"
+        else normalise_open_meteo_payload
+    )
+    normalized_records = [
+        normalise(payload, city_name)
+        for city_name, payload in raw_records
+    ]
+    return pd.concat(normalized_records, ignore_index=True)
+
+
 def deduplicate(dataframe: pd.DataFrame) -> pd.DataFrame:
     """Keep the latest record for each city and UTC observation timestamp."""
     return dataframe.drop_duplicates(
@@ -175,16 +195,7 @@ def transform(
         logger.warning("No raw data available for transformation.")
         return pd.DataFrame()
 
-    normalise = (
-        normalise_weatherapi_payload
-        if source == "weatherapi_forecast"
-        else normalise_open_meteo_payload
-    )
-    normalised_records = [
-        normalise(payload, city_name)
-        for city_name, payload in raw_records
-    ]
-    transformed = pd.concat(normalised_records, ignore_index=True)
+    transformed = normalise_records(raw_records, source)
     transformed = add_weather_description(transformed, weather_codes)
     transformed = add_derived_metrics(transformed)
     transformed["ingested_at_utc"] = datetime.now(timezone.utc).isoformat()

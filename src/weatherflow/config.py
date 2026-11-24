@@ -1,5 +1,6 @@
 from pathlib import Path
 import logging
+import math
 import os
 from typing import Any
 
@@ -109,10 +110,22 @@ def load_config(config_file: Path = CONFIG_FILE) -> dict[str, Any]:
             "precipitation_min_mm",
             "wind_speed_min_kmh",
             "feels_like_tolerance_c",
+            "cross_source_temperature_tolerance_c",
             "timeliness_hours",
         ),
         "dq",
     )
+    cross_source_tolerance = dq["cross_source_temperature_tolerance_c"]
+    if (
+        isinstance(cross_source_tolerance, bool)
+        or not isinstance(cross_source_tolerance, (int, float))
+        or not math.isfinite(cross_source_tolerance)
+        or cross_source_tolerance < 0
+    ):
+        raise ConfigurationError(
+            "'dq.cross_source_temperature_tolerance_c' must be a "
+            "finite non-negative number."
+        )
 
     paths_config = _require_mapping(config["paths"], "paths")
     if not paths_config:

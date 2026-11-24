@@ -8,7 +8,7 @@ WeatherFlow is a learning project that collects hourly weather data for five UK 
 
 1. **Extract:** Request hourly forecasts from Open-Meteo and WeatherAPI.com for London, Manchester, Birmingham, Edinburgh, and Cardiff.
 2. **Land raw data:** Save each complete API response as JSON under `data/raw/<UTC-date>/`.
-3. **Transform:** Flatten the hourly observations, derive UTC/local timestamps and weather metrics, apply WMO descriptions, and deduplicate by `(city, observed_at_utc)`.
+3. **Transform and validate:** Normalize both providers to the canonical hourly columns, apply each provider's weather-code reference, deduplicate by `(city, observed_at_utc, source)`, and warn when same-city/hour temperatures differ by more than the configured 3 °C threshold.
 4. **Process:** Write the transformed observations as Parquet under `data/processed/run_date=<UTC-date>/`.
 5. **Load:** Store the observations in `weather.db`. The `(city, observed_at_utc, source)` primary key makes repeated runs idempotent while keeping both providers' records.
 

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import math
 from typing import Any
 
 import pandas as pd
@@ -21,6 +22,91 @@ class CheckResult:
 
 class DataQualityError(RuntimeError):
     """Raised when a blocking data quality check fails."""
+
+
+def compare_source_temperatures(
+    open_meteo_data: pd.DataFrame,
+    weatherapi_data: pd.DataFrame,
+    threshold_c: float,
+) -> CheckResult:
+    """Compare temperatures for matching city and UTC-hour observations."""
+    if not math.isfinite(threshold_c) or threshold_c < 0:
+        raise ValueError("threshold_c must be a finite non-negative number.")
+
+    def select_measurements(data: pd.DataFrame, temperature_name: str) -> pd.DataFrame:
+        if data.empty:
+            return pd.DataFrame(
+                {
+                    "city": pd.Series(dtype="object"),
+                    "observed_hour": pd.Series(dtype="datetime64[ns, UTC]"),
+                    temperature_name: pd.Series(dtype="float64"),
+                }
+            )
+        selected = data[["city", "observed_at_utc", "temperature_c"]].copy()
+        selected["observed_hour"] = pd.to_datetime(
+            selected["observed_at_utc"],
+            utc=True,
+        ).dt.floor("h")
+        selected = selected.drop_duplicates(
+            subset=["city", "observed_hour"],
+            keep="last",
+        )
+        return selected[
+            ["city", "observed_hour", "temperature_c"]
+        ].rename(columns={"temperature_c": temperature_name})
+
+    open_meteo = select_measurements(
+        open_meteo_data,
+        "open_meteo_temperature_c",
+    )
+    weatherapi = select_measurements(
+        weatherapi_data,
+        "weatherapi_temperature_c",
+    )
+    matched = open_meteo.merge(
+        weatherapi,
+        on=["city", "observed_hour"],
+        how="inner",
+        validate="one_to_one",
+    )
+    matched["temperature_difference_c"] = (
+        pd.to_numeric(matched["open_meteo_temperature_c"], errors="coerce")
+        - pd.to_numeric(matched["weatherapi_temperature_c"], errors="coerce")
+    ).abs()
+    matched = matched.dropna(subset=["temperature_difference_c"])
+
+    if matched.empty:
+        return CheckResult(
+            name="cross_source_temperature_difference",
+            dimension="consistency",
+            severity="warn",
+            passed=False,
+            failed_rows=0,
+            details=(
+                "Compared 0 matching city/hour rows; 0 exceeded the "
+                f"{threshold_c:g} C threshold; worst city unavailable."
+            ),
+        )
+
+    exceeded = matched["temperature_difference_c"].gt(threshold_c)
+    worst = matched.sort_values(
+        ["temperature_difference_c", "city"],
+        ascending=[False, True],
+    ).iloc[0]
+    exceeded_count = int(exceeded.sum())
+    return CheckResult(
+        name="cross_source_temperature_difference",
+        dimension="consistency",
+        severity="warn",
+        passed=exceeded_count == 0,
+        failed_rows=exceeded_count,
+        details=(
+            f"Compared {len(matched)} matching city/hour rows; "
+            f"{exceeded_count} exceeded the {threshold_c:g} C threshold; "
+            f"worst city {worst['city']} "
+            f"({worst['temperature_difference_c']:g} C difference)."
+        ),
+    )
 
 
 def _check(

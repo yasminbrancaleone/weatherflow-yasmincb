@@ -4,7 +4,12 @@ import pandas as pd
 import pytest
 
 from weatherflow.config import load_config
-from weatherflow.validate import DataQualityError, validate
+from weatherflow.output import write_dq_report
+from weatherflow.validate import (
+    DataQualityError,
+    compare_source_temperatures,
+    validate,
+)
 
 
 @pytest.fixture
@@ -160,3 +165,108 @@ def test_duplicate_city_hour_source_raises_data_quality_error(clean_weather_row)
             load_config(),
             run_mode="incremental",
         )
+
+
+def test_cross_source_check_reports_count_threshold_and_worst_city(tmp_path):
+    """The DQ result counts only above-threshold pairs and reports the worst."""
+    open_meteo = pd.DataFrame(
+        [
+            {
+                "city": "London",
+                "observed_at_utc": "2026-11-17T12:00:00Z",
+                "temperature_c": 10.0,
+            },
+            {
+                "city": "Cardiff",
+                "observed_at_utc": "2026-11-17T12:00:00Z",
+                "temperature_c": 8.0,
+            },
+            {
+                "city": "Manchester",
+                "observed_at_utc": "2026-11-17T12:00:00Z",
+                "temperature_c": 9.0,
+            },
+        ]
+    )
+    weatherapi = pd.DataFrame(
+        [
+            {
+                "city": "London",
+                "observed_at_utc": "2026-11-17T12:45:00Z",
+                "temperature_c": 13.0,
+            },
+            {
+                "city": "Cardiff",
+                "observed_at_utc": "2026-11-17T12:00:00Z",
+                "temperature_c": 13.0,
+            },
+            {
+                "city": "Manchester",
+                "observed_at_utc": "2026-11-17T12:00:00Z",
+                "temperature_c": 13.0,
+            },
+        ]
+    )
+
+    result = compare_source_temperatures(open_meteo, weatherapi, 3.0)
+    report_path = write_dq_report(
+        [result],
+        tmp_path,
+        good_rows=3,
+        quarantined_rows=0,
+    )
+    report = report_path.read_text(encoding="utf-8")
+
+    assert result.passed is False
+    assert result.failed_rows == 2
+    assert "2 exceeded the 3 C threshold" in result.details
+    assert "worst city Cardiff (5 C difference)" in result.details
+    assert "cross_source_temperature_difference" in report
+    assert "worst city Cardiff (5 C difference)" in report
+
+
+def test_cross_source_check_warns_when_no_city_hour_pairs_match():
+    """A missing source overlap is reported as an unperformed comparison."""
+    open_meteo = pd.DataFrame(
+        [
+            {
+                "city": "London",
+                "observed_at_utc": "2026-11-17T12:00:00Z",
+                "temperature_c": 10.0,
+            }
+        ]
+    )
+    weatherapi = pd.DataFrame(
+        [
+            {
+                "city": "Cardiff",
+                "observed_at_utc": "2026-11-17T12:00:00Z",
+                "temperature_c": 13.0,
+            }
+        ]
+    )
+
+    result = compare_source_temperatures(open_meteo, weatherapi, 3.0)
+
+    assert result.passed is False
+    assert result.failed_rows == 0
+    assert "Compared 0 matching city/hour rows" in result.details
+
+
+def test_cross_source_check_handles_an_empty_source():
+    """A source with no normalized observations still yields a DQ warning."""
+    weatherapi = pd.DataFrame(
+        [
+            {
+                "city": "London",
+                "observed_at_utc": "2026-11-17T12:00:00Z",
+                "temperature_c": 13.0,
+            }
+        ]
+    )
+
+    result = compare_source_temperatures(pd.DataFrame(), weatherapi, 3.0)
+
+    assert result.passed is False
+    assert result.failed_rows == 0
+    assert "worst city unavailable" in result.details

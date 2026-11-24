@@ -57,4 +57,5 @@ dq:
   precipitation_min_mm: 0
   wind_speed_min_kmh: 0
   feels_like_tolerance_c: 15
+  cross_source_temperature_tolerance_c: 3.0
   timeliness_hours: 3

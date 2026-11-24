@@ -11,8 +11,13 @@ from .output import (
     write_quarantine,
 )
 from .reference import load_weatherapi_codes, load_wmo_codes
-from .transform import transform
-from .validate import CheckResult, DataQualityError, validate
+from .transform import normalise_records, transform
+from .validate import (
+    CheckResult,
+    DataQualityError,
+    compare_source_temperatures,
+    validate,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -23,6 +28,7 @@ def process_raw_records(
     pipeline_config: dict[str, Any],
     source: str,
     run_mode: str = "incremental",
+    additional_checks: tuple[CheckResult, ...] = (),
 ) -> int:
     """Transform, validate, and load raw records through one shared path."""
     if not raw_records:
@@ -46,6 +52,7 @@ def process_raw_records(
             pipeline_config,
             run_mode=run_mode,
         )
+        check_results.extend(additional_checks)
     except DataQualityError as error:
         logger.exception(
             "Blocking data quality failure prevented fact loading."
@@ -60,7 +67,8 @@ def process_raw_records(
                     failed_rows=1,
                     details=str(error),
                 )
-            ],
+            ]
+            + list(additional_checks),
             pipeline_config["paths"]["dq_report_dir"],
             good_rows=0,
             quarantined_rows=0,
@@ -152,12 +160,35 @@ def run(
             )
         )
 
+    cross_source_check = None
+    cross_source_report_source = None
+    if source == "all":
+        open_meteo_records = source_runs[0][0]
+        weatherapi_records = source_runs[1][0]
+        cross_source_report_source = next(
+            (
+                source_name
+                for raw_data, source_name in source_runs
+                if raw_data
+            ),
+            None,
+        )
+        cross_source_check = compare_source_temperatures(
+            normalise_records(open_meteo_records, "open_meteo_forecast"),
+            normalise_records(weatherapi_records, "weatherapi_forecast"),
+            pipeline_config["dq"]["cross_source_temperature_tolerance_c"],
+        )
+
     return sum(
         process_raw_records(
             raw_data,
             pipeline_config,
             source=source_name,
             run_mode="incremental",
+            additional_checks=(cross_source_check,)
+            if cross_source_check is not None
+            and source_name == cross_source_report_source
+            else (),
         )
         for raw_data, source_name in source_runs
     )
