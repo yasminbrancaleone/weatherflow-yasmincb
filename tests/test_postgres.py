@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import psycopg
@@ -101,5 +102,30 @@ def test_postgres_load_rolls_back_all_facts_on_constraint_failure(london_payload
                 source,
             )
         assert _count_test_source(source) == 0
+    finally:
+        _delete_test_source(source)
+
+
+def test_analysis_queries_run_on_postgres(london_payload):
+    """All documented analysis queries execute against the PostgreSQL schema."""
+    source = f"postgres_analysis_test_{uuid4().hex}"
+    config = load_config()
+    transformed = transform(
+        [("London", london_payload)],
+        load_wmo_codes(),
+    )
+    queries_path = Path(__file__).parents[1] / "sql" / "analysis_queries.sql"
+    queries = [
+        query.strip()
+        for query in queries_path.read_text(encoding="utf-8").split(";")
+        if query.strip()
+    ]
+
+    try:
+        load_with_counts(transformed, TEST_DATABASE_URL, config, source)
+        assert len(queries) == 5
+        with psycopg.connect(TEST_DATABASE_URL) as connection:
+            for query in queries:
+                connection.execute(query).fetchall()
     finally:
         _delete_test_source(source)
