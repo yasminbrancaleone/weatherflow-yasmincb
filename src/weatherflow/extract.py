@@ -39,6 +39,43 @@ def _is_retryable(error: requests.RequestException) -> bool:
     return False
 
 
+def _get_with_retries(
+    url: str,
+    params: dict[str, Any],
+    api_config: dict[str, Any],
+    context: str,
+) -> dict[str, Any]:
+    """GET a weather API payload with retry and exponential backoff."""
+    max_retries = api_config["max_retries"]
+
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(
+                url,
+                params=params,
+                timeout=api_config["timeout_seconds"],
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as error:
+            if not _is_retryable(error) or attempt == max_retries:
+                logger.error("Failed %s: %s", context, error)
+                raise
+
+            delay = 2**attempt
+            logger.warning(
+                "Retrying %s after attempt %d/%d: %s; waiting %d second(s)",
+                context,
+                attempt + 1,
+                max_retries + 1,
+                error,
+                delay,
+            )
+            time.sleep(delay)
+
+    raise RuntimeError("Request retry loop ended unexpectedly.")
+
+
 def _fetch_payload(
     city: dict[str, Any], api_config: dict[str, Any]
 ) -> dict[str, Any]:
@@ -50,35 +87,12 @@ def _fetch_payload(
         "forecast_days": api_config["forecast_days"],
         "timezone": api_config["timezone"],
     }
-    max_retries = api_config["max_retries"]
-
-    for attempt in range(max_retries + 1):
-        try:
-            response = requests.get(
-                api_config["forecast_url"],
-                params=params,
-                timeout=api_config["timeout_seconds"],
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as error:
-            if not _is_retryable(error) or attempt == max_retries:
-                logger.error("Failed extracting %s: %s", city["name"], error)
-                raise
-
-            delay = 2**attempt
-            logger.warning(
-                "Retrying extraction for %s after attempt %d/%d: %s; "
-                "waiting %d second(s)",
-                city["name"],
-                attempt + 1,
-                max_retries + 1,
-                error,
-                delay,
-            )
-            time.sleep(delay)
-
-    raise RuntimeError("Request retry loop ended unexpectedly.")
+    return _get_with_retries(
+        api_config["forecast_url"],
+        params,
+        api_config,
+        f"forecast extraction for {city['name']}",
+    )
 
 
 def build_incremental_window(
@@ -144,40 +158,13 @@ def _fetch_archive_payload(
         "hourly": ",".join(api_config["hourly_variables"]),
         "timezone": api_config["timezone"],
     }
-    max_retries = api_config["max_retries"]
-
-    for attempt in range(max_retries + 1):
-        try:
-            response = requests.get(
-                api_config["archive_url"],
-                params=params,
-                timeout=api_config["timeout_seconds"],
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as error:
-            if not _is_retryable(error) or attempt == max_retries:
-                logger.error(
-                    "Failed archive extraction for %s (%s to %s): %s",
-                    city["name"],
-                    start_date.isoformat(),
-                    end_date.isoformat(),
-                    error,
-                )
-                raise
-
-            delay = 2**attempt
-            logger.warning(
-                "Retrying archive extraction for %s after attempt %d/%d: "
-                "waiting %d second(s)",
-                city["name"],
-                attempt + 1,
-                max_retries + 1,
-                delay,
-            )
-            time.sleep(delay)
-
-    raise RuntimeError("Archive request retry loop ended unexpectedly.")
+    return _get_with_retries(
+        api_config["archive_url"],
+        params,
+        api_config,
+        f"archive extraction for {city['name']} "
+        f"({start_date.isoformat()} to {end_date.isoformat()})",
+    )
 
 
 def extract_archive(
@@ -287,33 +274,12 @@ def _fetch_payload_from_forecast_window(
     params: dict[str, Any],
 ) -> dict[str, Any]:
     """Fetch an incremental forecast window with the configured retries."""
-    max_retries = api_config["max_retries"]
-    for attempt in range(max_retries + 1):
-        try:
-            response = requests.get(
-                api_config["forecast_url"],
-                params=params,
-                timeout=api_config["timeout_seconds"],
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as error:
-            if not _is_retryable(error) or attempt == max_retries:
-                logger.error(
-                    "Failed incremental extraction for %s: %s",
-                    city["name"],
-                    error,
-                )
-                raise
-            delay = 2**attempt
-            logger.warning(
-                "Retrying incremental extraction for %s after attempt %d/%d",
-                city["name"],
-                attempt + 1,
-                max_retries + 1,
-            )
-            time.sleep(delay)
-    raise RuntimeError("Incremental request retry loop ended unexpectedly.")
+    return _get_with_retries(
+        api_config["forecast_url"],
+        params,
+        api_config,
+        f"incremental extraction for {city['name']}",
+    )
 
 
 def extract(config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
