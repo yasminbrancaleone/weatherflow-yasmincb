@@ -19,5 +19,18 @@ services:
       retries: 10
       start_period: 10s
 
+  pipeline:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@warehouse:5432/${POSTGRES_DB}
+    depends_on:
+      warehouse:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./docs/dq_reports:/app/docs/dq_reports
+
 volumes:
   pgdata:

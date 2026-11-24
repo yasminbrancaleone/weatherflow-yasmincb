@@ -22,7 +22,9 @@ weatherflow-yasmincb/
 ├── data/processed/           # Partitioned Parquet outputs (not tracked by Git)
 ├── config.yaml               # API, city, and output path configuration
 ├── .env.example              # Environment variable template (fake values only)
-├── docker-compose.yml         # PostgreSQL 18 warehouse
+├── Dockerfile                 # Non-root Python pipeline image
+├── .dockerignore              # Excludes secrets, local data, and development files
+├── docker-compose.yml         # PostgreSQL warehouse and pipeline services
 ├── docs/
 │   ├── data_dictionary.md    # Fields, units, and dataset grain
 │   ├── reference_architecture.md
@@ -68,7 +70,9 @@ Copy-Item .env.example .env
 
 Edit `.env`: set your WeatherAPI.com key and replace the sample PostgreSQL password.
 Keep `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `DATABASE_URL` consistent;
-`DATABASE_URL` should connect to `localhost:5433`. Then start the warehouse:
+`DATABASE_URL` should connect to `localhost:5433`. Use a URL-safe PostgreSQL password
+(letters, numbers, underscores, or hyphens) because Compose also builds the container's
+`DATABASE_URL` from it. Then start the warehouse:
 
 ```powershell
 docker compose up -d warehouse
@@ -78,6 +82,34 @@ docker compose ps
 Wait until `warehouse` reports `healthy`. The named volume preserves warehouse data
 across `docker compose down` and `docker compose up`; `docker compose down -v` also
 deletes that data. The `.env` file is ignored by Git.
+
+### Run the pipeline in Docker
+
+The Docker workflow does not require a local Python installation. After editing
+`.env` as described above, build the image and run the pipeline:
+
+```powershell
+docker compose build pipeline
+docker compose run --rm pipeline run
+```
+
+Compose waits for the warehouse health check before starting the pipeline. Inside
+the Compose network, the pipeline connects to `warehouse:5432`; from your computer,
+`DATABASE_URL` in `.env` continues to use `localhost:5433`. The `./data` directory
+and DQ reports are mounted from the host, so generated files remain available after
+the one-off pipeline container is removed.
+
+Run a seven-day backfill or select one source with:
+
+```powershell
+docker compose run --rm pipeline backfill --days 7
+docker compose run --rm pipeline run --source open_meteo
+docker compose run --rm pipeline run --source weatherapi
+```
+
+The container's exit code is returned to the calling shell. For example, a missing
+WeatherAPI key causes a non-zero exit code. Use `docker compose down` to stop the
+warehouse while retaining its named data volume.
 
 ## Run Tests
 
@@ -102,7 +134,7 @@ not set. URL-encode special characters in the password when building the connect
 
 ## Run the Pipeline
 
-From any directory, with the virtual environment active and the package installed:
+With the virtual environment active and the package installed, run locally with:
 
 ```powershell
 python -m weatherflow run
