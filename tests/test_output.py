@@ -24,6 +24,14 @@ def test_write_processed_parquet_creates_partition(tmp_path):
     assert output.name == "part-20261117T123000Z.parquet"
     assert pd.read_parquet(output).equals(dataframe)
 
+    sourced_output = write_processed_parquet(
+        dataframe,
+        tmp_path,
+        run_at,
+        suffix="weatherapi_forecast",
+    )
+    assert sourced_output.name == "part-20261117T123000Z-weatherapi_forecast.parquet"
+
 
 def test_write_quarantine_returns_none_for_empty_dataframe(tmp_path):
     """An empty quarantine DataFrame does not create a file."""
@@ -73,3 +81,13 @@ def test_write_dq_report_creates_markdown_summary(tmp_path):
     assert "- **Good rows:** 5" in report
     assert "- **Quarantined rows:** 1" in report
     assert "| temperature_range | validity | quarantine | FAIL | 1 |" in report
+
+    sourced_report = write_dq_report(
+        results,
+        report_dir,
+        5,
+        1,
+        run_at,
+        suffix="weatherapi_forecast",
+    )
+    assert sourced_report.name == "20261117T123000Z-weatherapi_forecast.md"

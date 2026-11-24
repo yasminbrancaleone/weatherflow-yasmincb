@@ -1,18 +1,18 @@
 # WeatherFlow ETL Pipeline
 
-WeatherFlow is a learning project that collects hourly weather data for five UK cities from the free [Open-Meteo Forecast API](https://open-meteo.com/en/docs), saves the original API responses, transforms them with pandas, and loads them into SQLite for SQL analysis.
+WeatherFlow is a learning project that collects hourly weather data for five UK cities from the free [Open-Meteo Forecast API](https://open-meteo.com/en/docs) and [WeatherAPI.com](https://www.weatherapi.com/), saves the original API responses, transforms them with pandas, and loads them into SQLite for SQL analysis.
 
 **GitHub repository:** [yasminbrancaleone/weatherflow-yasmincb](https://github.com/yasminbrancaleone/weatherflow-yasmincb)
 
 ## Pipeline
 
-1. **Extract:** Request the previous day and forecast from Open-Meteo for London, Manchester, Birmingham, Edinburgh, and Cardiff.
+1. **Extract:** Request hourly forecasts from Open-Meteo and WeatherAPI.com for London, Manchester, Birmingham, Edinburgh, and Cardiff.
 2. **Land raw data:** Save each complete API response as JSON under `data/raw/<UTC-date>/`.
 3. **Transform:** Flatten the hourly observations, derive UTC/local timestamps and weather metrics, apply WMO descriptions, and deduplicate by `(city, observed_at_utc)`.
 4. **Process:** Write the transformed observations as Parquet under `data/processed/run_date=<UTC-date>/`.
-5. **Load:** Store the observations in `weather.db`. The `(city, observed_at_utc)` primary key makes repeated runs idempotent.
+5. **Load:** Store the observations in `weather.db`. The `(city, observed_at_utc, source)` primary key makes repeated runs idempotent while keeping both providers' records.
 
-The API does not require a key. An internet connection is required to run the extraction.
+Open-Meteo does not require a key. WeatherAPI.com uses `WEATHERAPI_KEY` from `.env`; the key is never written to raw payload files or application logs. An internet connection is required to run extraction.
 
 ## Project Structure
 
@@ -21,6 +21,7 @@ weatherflow-yasmincb/
 ├── data/raw/                 # Date-partitioned raw API responses (not tracked by Git)
 ├── data/processed/           # Partitioned Parquet outputs (not tracked by Git)
 ├── config.yaml               # API, city, and output path configuration
+├── .env.example              # Environment variable template (fake values only)
 ├── docs/
 │   ├── data_dictionary.md    # Fields, units, and dataset grain
 │   ├── reference_architecture.md
@@ -58,7 +59,10 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python -m pip install -e .
+Copy-Item .env.example .env
 ```
+
+Edit `.env` and replace the example value with your own WeatherAPI.com key. The `.env` file is ignored by Git.
 
 ## Run Tests
 
@@ -81,6 +85,13 @@ From any directory, with the virtual environment active and the package installe
 
 ```powershell
 python -m weatherflow run
+```
+
+The default runs both sources. To run only one:
+
+```powershell
+python -m weatherflow run --source open_meteo
+python -m weatherflow run --source weatherapi
 ```
 
 Run a 30-day historical backfill ending five days before today:
@@ -120,6 +131,7 @@ This command also works when launched through a VS Code SQLite extension configu
 
 - [`notebooks/01_explore.ipynb`](notebooks/01_explore.ipynb) profiles and visualizes the raw hourly data.
 - [`docs/data_dictionary.md`](docs/data_dictionary.md) documents the explored dataset's columns and units.
+- [`src/weatherflow/reference/weatherapi_codes.csv`](src/weatherflow/reference/weatherapi_codes.csv) maps WeatherAPI condition codes to the project's weather categories.
 - [`sql/week1_queries.sql`](sql/week1_queries.sql) contains queries for coverage, yesterday's average temperature, and the five windiest observations.
 
 ## Author

@@ -60,6 +60,50 @@ def standardise_columns(dataframe: pd.DataFrame) -> pd.DataFrame:
     return standardised
 
 
+def normalise_open_meteo_payload(
+    payload: dict[str, Any],
+    city: str,
+) -> pd.DataFrame:
+    """Convert one Open-Meteo payload to the shared hourly column format."""
+    return standardise_columns(flatten_payload(payload, city))
+
+
+def normalise_weatherapi_payload(
+    payload: dict[str, Any],
+    city: str,
+) -> pd.DataFrame:
+    """Convert one WeatherAPI payload to the shared hourly column format."""
+    observations = [
+        hour
+        for forecast_day in payload["forecast"]["forecastday"]
+        for hour in forecast_day["hour"]
+    ]
+    normalized = pd.DataFrame(
+        {
+            "city": city,
+            "observed_at_utc": pd.to_datetime(
+                [hour["time_epoch"] for hour in observations],
+                unit="s",
+                utc=True,
+            ),
+            "temperature_c": [hour["temp_c"] for hour in observations],
+            "feels_like_c": [hour["feelslike_c"] for hour in observations],
+            "humidity_pct": [hour["humidity"] for hour in observations],
+            "precipitation_mm": [hour["precip_mm"] for hour in observations],
+            "wind_speed_kmh": [hour["wind_kph"] for hour in observations],
+            "weather_code": [
+                hour["condition"]["code"] for hour in observations
+            ],
+            "is_day": [hour["is_day"] for hour in observations],
+        }
+    )
+    normalized["observed_at_local"] = normalized[
+        "observed_at_utc"
+    ].dt.tz_convert("Europe/London")
+    normalized["is_day"] = normalized["is_day"].astype("boolean")
+    return normalized
+
+
 def deduplicate(dataframe: pd.DataFrame) -> pd.DataFrame:
     """Keep the latest record for each city and UTC observation timestamp."""
     return dataframe.drop_duplicates(
@@ -122,20 +166,26 @@ def add_derived_metrics(dataframe: pd.DataFrame) -> pd.DataFrame:
 
 
 def transform(
-    raw_records: list[tuple[str, dict[str, Any]]], wmo_codes: pd.DataFrame
+    raw_records: list[tuple[str, dict[str, Any]]],
+    weather_codes: pd.DataFrame,
+    source: str = "open_meteo_forecast",
 ) -> pd.DataFrame:
     """Transform raw weather records into the canonical hourly dataset."""
     if not raw_records:
         logger.warning("No raw data available for transformation.")
         return pd.DataFrame()
 
-    flattened = [
-        flatten_payload(payload, city_name)
+    normalise = (
+        normalise_weatherapi_payload
+        if source == "weatherapi_forecast"
+        else normalise_open_meteo_payload
+    )
+    normalised_records = [
+        normalise(payload, city_name)
         for city_name, payload in raw_records
     ]
-    combined = pd.concat(flattened, ignore_index=True)
-    transformed = standardise_columns(combined)
-    transformed = add_weather_description(transformed, wmo_codes)
+    transformed = pd.concat(normalised_records, ignore_index=True)
+    transformed = add_weather_description(transformed, weather_codes)
     transformed = add_derived_metrics(transformed)
     transformed["ingested_at_utc"] = datetime.now(timezone.utc).isoformat()
     transformed = deduplicate(transformed)

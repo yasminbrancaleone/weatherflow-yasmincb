@@ -12,6 +12,7 @@ def write_processed_parquet(
     dataframe: pd.DataFrame,
     processed_dir: Path | str,
     run_at: datetime | None = None,
+    suffix: str | None = None,
 ) -> Path:
     """Write transformed observations to a date-partitioned Parquet file."""
     run_timestamp = run_at or datetime.now(timezone.utc)
@@ -19,8 +20,10 @@ def write_processed_parquet(
         f"run_date={run_timestamp.strftime('%Y-%m-%d')}"
     )
     partition_dir.mkdir(parents=True, exist_ok=True)
+    suffix_text = f"-{suffix}" if suffix else ""
     output_path = partition_dir / (
-        f"part-{run_timestamp.strftime('%Y%m%dT%H%M%SZ')}.parquet"
+        f"part-{run_timestamp.strftime('%Y%m%dT%H%M%SZ')}"
+        f"{suffix_text}.parquet"
     )
     dataframe.to_parquet(output_path, index=False, engine="pyarrow")
     logger.info("Wrote %d observations to %s.", len(dataframe), output_path)
@@ -59,13 +62,15 @@ def write_dq_report(
     good_rows: int,
     quarantined_rows: int,
     run_at: datetime | None = None,
+    suffix: str | None = None,
 ) -> Path:
     """Write a Markdown summary of the latest data quality checks."""
     run_timestamp = run_at or datetime.now(timezone.utc)
     report_dir = Path(report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
+    suffix_text = f"-{suffix}" if suffix else ""
     report_path = report_dir / (
-        f"{run_timestamp.strftime('%Y%m%dT%H%M%SZ')}.md"
+        f"{run_timestamp.strftime('%Y%m%dT%H%M%SZ')}{suffix_text}.md"
     )
 
     lines = [

@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 import weatherflow.__main__ as cli
 import weatherflow.pipeline as pipeline
+import pytest
+from weatherflow.config import ConfigurationError
 
 
 def test_backfill_parser_accepts_explicit_dates():
@@ -46,12 +48,21 @@ def test_resolve_backfill_dates_rejects_inverted_range():
 
 def test_main_dispatches_forecast_run(monkeypatch):
     """The run subcommand dispatches the forecast pipeline."""
+    selected_sources = []
     monkeypatch.setattr(
         "weatherflow.__main__.run_pipeline",
-        lambda: 7,
+        lambda source: selected_sources.append(source),
     )
 
     assert cli.main(["run"]) == 0
+    assert selected_sources == ["all"]
+
+
+def test_run_parser_accepts_source_selection():
+    """The run command accepts each supported weather-source selector."""
+    for source in ("open_meteo", "weatherapi", "all"):
+        arguments = cli.create_parser().parse_args(["run", "--source", source])
+        assert arguments.source == source
 
 
 def test_main_dispatches_backfill(monkeypatch):
@@ -75,7 +86,7 @@ def test_incremental_run_uses_forecast_source():
         "process_raw_records",
         return_value=3,
     ) as process:
-        assert pipeline.run(config) == 3
+        assert pipeline.run(config, source="open_meteo") == 3
 
     process.assert_called_once_with(
         raw_records,
@@ -83,6 +94,63 @@ def test_incremental_run_uses_forecast_source():
         source="open_meteo_forecast",
         run_mode="incremental",
     )
+
+
+def test_all_sources_fail_before_any_request_when_weatherapi_key_is_missing():
+    """The key is checked before extraction from either source begins."""
+    config = {"paths": {}}
+    with patch.object(
+        pipeline,
+        "load_weatherapi_key",
+        side_effect=ConfigurationError("WEATHERAPI_KEY is required."),
+    ), patch.object(
+        pipeline,
+        "extract_incremental",
+        side_effect=AssertionError("Open-Meteo request should not be made."),
+    ) as open_meteo_extract, pytest.raises(
+        ConfigurationError,
+        match="WEATHERAPI_KEY is required",
+    ):
+        pipeline.run(config, source="all")
+
+    open_meteo_extract.assert_not_called()
+
+
+def test_all_sources_use_the_shared_processing_path():
+    """Both providers route through the same transform/validate/load function."""
+    config = {"paths": {}}
+    open_meteo_records = [("London", {"hourly": {"time": []}})]
+    weatherapi_records = [("London", {"forecast": {"forecastday": []}})]
+
+    with patch.object(
+        pipeline,
+        "load_weatherapi_key",
+        return_value="test-key",
+    ), patch.object(
+        pipeline,
+        "extract_incremental",
+        return_value=open_meteo_records,
+    ), patch.object(
+        pipeline,
+        "extract_weatherapi",
+        return_value=weatherapi_records,
+    ), patch.object(
+        pipeline,
+        "process_raw_records",
+        side_effect=[2, 3],
+    ) as process:
+        assert pipeline.run(config, source="all") == 5
+
+    assert process.call_args_list[0].args == (open_meteo_records, config)
+    assert process.call_args_list[0].kwargs == {
+        "source": "open_meteo_forecast",
+        "run_mode": "incremental",
+    }
+    assert process.call_args_list[1].args == (weatherapi_records, config)
+    assert process.call_args_list[1].kwargs == {
+        "source": "weatherapi_forecast",
+        "run_mode": "incremental",
+    }
 
 
 def test_backfill_run_uses_archive_source():

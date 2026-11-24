@@ -24,7 +24,16 @@ def create_parser() -> argparse.ArgumentParser:
         description="Run the WeatherFlow data pipeline.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("run", help="Run the weather data pipeline.")
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run the weather data pipeline.",
+    )
+    run_parser.add_argument(
+        "--source",
+        choices=("open_meteo", "weatherapi", "all"),
+        default="all",
+        help="Weather source to run (default: all).",
+    )
     backfill_parser = subparsers.add_parser(
         "backfill",
         help="Backfill historical weather data.",
@@ -72,7 +81,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = create_parser().parse_args(argv)
 
     if arguments.command == "run":
-        run_pipeline()
+        run_pipeline(source=arguments.source)
         return 0
 
     if arguments.command == "backfill":

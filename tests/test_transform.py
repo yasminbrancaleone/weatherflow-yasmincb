@@ -1,14 +1,18 @@
 """Tests for weather transformation functions."""
 
+import json
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
-from weatherflow.reference import load_wmo_codes
+from weatherflow.reference import load_weatherapi_codes, load_wmo_codes
 from weatherflow.transform import (
     add_derived_metrics,
     add_weather_description,
     deduplicate,
     flatten_payload,
+    normalise_weatherapi_payload,
     standardise_columns,
     transform,
 )
@@ -64,6 +68,33 @@ def test_transform_uses_utc_and_london_timestamps(london_payload):
     assert result["observed_at_utc"].dt.tz is not None
     assert str(result["observed_at_utc"].dt.tz) == "UTC"
     assert str(result["observed_at_local"].dt.tz) == "Europe/London"
+
+
+def test_weatherapi_normalizer_maps_six_hour_fixture():
+    """WeatherAPI normalization is pure and maps timestamps and codes."""
+    fixture_path = (
+        Path(__file__).parent / "fixtures" / "weatherapi_london.json"
+    )
+    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+    original_payload = json.dumps(payload, sort_keys=True)
+
+    normalized = normalise_weatherapi_payload(payload, "London")
+    transformed = transform(
+        [("London", payload)],
+        load_weatherapi_codes(),
+        source="weatherapi_forecast",
+    )
+
+    assert len(normalized) == 6
+    assert normalized.loc[0, "observed_at_utc"] == pd.Timestamp(
+        "2026-11-24T00:00:00Z"
+    )
+    assert normalized.loc[0, "temperature_c"] == 8.1
+    assert normalized.loc[0, "wind_speed_kmh"] == 9.0
+    assert not normalized.loc[0, "is_day"]
+    assert transformed.loc[0, "description"] == "Partly cloudy"
+    assert transformed.loc[0, "category"] == "cloudy"
+    assert json.dumps(payload, sort_keys=True) == original_payload
 
 
 def test_deduplicate_keeps_latest_row_for_city_and_hour():

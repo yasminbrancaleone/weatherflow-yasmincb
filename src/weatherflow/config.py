@@ -15,6 +15,7 @@ CONFIG_FILE = Path(__file__).resolve().parents[2] / "config.yaml"
 _REQUIRED_API_KEYS = (
     "forecast_url",
     "archive_url",
+    "weatherapi_forecast_url",
     "timeout_seconds",
     "max_retries",
     "hourly_variables",

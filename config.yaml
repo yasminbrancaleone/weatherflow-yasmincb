@@ -1,6 +1,7 @@
 api:
   forecast_url: https://api.open-meteo.com/v1/forecast
   archive_url: https://archive-api.open-meteo.com/v1/archive
+  weatherapi_forecast_url: https://api.weatherapi.com/v1/forecast.json
   timeout_seconds: 10
   max_retries: 3
   past_days: 1
