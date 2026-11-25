@@ -15,10 +15,10 @@ from weatherflow.reference import load_wmo_codes
 from weatherflow.transform import transform
 
 
-TEST_DATABASE_URL = os.environ.get("WEATHERFLOW_TEST_DATABASE_URL")
+TEST_DATABASE_URL = os.environ.get("DATABASE_URL")
 pytestmark = pytest.mark.skipif(
     not TEST_DATABASE_URL,
-    reason="Set WEATHERFLOW_TEST_DATABASE_URL to run PostgreSQL integration tests.",
+    reason="Set DATABASE_URL to run PostgreSQL integration tests.",
 )
 
 
