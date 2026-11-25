@@ -1,5 +1,7 @@
 # WeatherFlow ETL Pipeline
 
+[![CI](https://github.com/yasminbrancaleone/weatherflow-yasmincb/actions/workflows/ci.yml/badge.svg)](https://github.com/yasminbrancaleone/weatherflow-yasmincb/actions/workflows/ci.yml)
+
 WeatherFlow is a learning project that collects hourly weather data for five UK cities from the free [Open-Meteo Forecast API](https://open-meteo.com/en/docs) and [WeatherAPI.com](https://www.weatherapi.com/), saves the original API responses, transforms them with pandas, and loads them into a PostgreSQL 18 warehouse for SQL analysis. SQLite remains available as a local fallback when `DATABASE_URL` is unset.
 
 **GitHub repository:** [yasminbrancaleone/weatherflow-yasmincb](https://github.com/yasminbrancaleone/weatherflow-yasmincb)
@@ -47,8 +49,10 @@ weatherflow-yasmincb/
 ├── sql/
 │   ├── analysis_queries.sql   # PostgreSQL analytical queries
 │   └── schema_postgres.sql    # Warehouse star schema
+├── .github/workflows/ci.yml   # Unit and PostgreSQL integration CI
 ├── pyproject.toml
 ├── requirements.txt
+├── requirements-dev.txt
 └── weather.db               # SQLite output (not tracked by Git)
 ```
 
@@ -68,7 +72,7 @@ git clone https://github.com/yasminbrancaleone/weatherflow-yasmincb.git
 cd weatherflow-yasmincb
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python -m pip install -e .
 Copy-Item .env.example .env
 ```
@@ -157,24 +161,30 @@ docker compose --env-file .env --env-file orchestration/.env -f orchestration/do
 
 ## Run Tests
 
-With the warehouse running, set the integration-test URL to match the credentials
-in `.env` and run the complete suite with coverage:
+The CI workflow runs on every push and pull request. It uses a temporary PostgreSQL
+18 service and enforces at least 70% coverage. No WeatherAPI key or live API request
+is needed by the tests.
+
+To run tests offline without PostgreSQL, leave `DATABASE_URL` unset. The PostgreSQL
+integration tests will be skipped:
 
 ```powershell
-$env:WEATHERFLOW_TEST_DATABASE_URL = "postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5433/<POSTGRES_DB>"
-pytest -v --cov=src --cov-report=term-missing
-Remove-Item Env:WEATHERFLOW_TEST_DATABASE_URL
+Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+pytest --cov=src --cov-report=term-missing --cov-fail-under=70
 ```
 
-Latest validation summary:
+To run the PostgreSQL integration tests locally, start the warehouse and set its
+connection URL before running the same command:
 
-```text
-64 passed
-TOTAL                            793    124    84%
+```powershell
+$env:DATABASE_URL = "postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5433/<POSTGRES_DB>"
+pytest --cov=src --cov-report=term-missing --cov-fail-under=70
+Remove-Item Env:DATABASE_URL
 ```
 
-The PostgreSQL integration tests are skipped if `WEATHERFLOW_TEST_DATABASE_URL` is
-not set. URL-encode special characters in the password when building the connection URL.
+Latest local validation: 67 passed with PostgreSQL 18 enabled (84.60% coverage);
+without `DATABASE_URL`, 64 passed and the 3 PostgreSQL integration tests were skipped
+(78.24% coverage). URL-encode special characters in the connection URL password.
 
 ## Run the Pipeline
 
