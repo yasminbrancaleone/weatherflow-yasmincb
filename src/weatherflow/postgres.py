@@ -54,6 +54,13 @@ def _execute_schema(cursor: psycopg.Cursor[Any]) -> None:
             cursor.execute(statement)
 
 
+def ensure_schema(database_url: str) -> None:
+    """Create missing warehouse tables without loading fact data."""
+    with psycopg.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            _execute_schema(cursor)
+
+
 def _upsert_dimensions(
     cursor: psycopg.Cursor[Any],
     config: dict[str, Any],

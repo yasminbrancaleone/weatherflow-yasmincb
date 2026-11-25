@@ -37,7 +37,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     subparsers.add_parser(
         "alerts",
-        help="Check recent high-risk weather observations.",
+        help="Record deduplicated alerts for upcoming high-risk weather.",
     )
     backfill_parser = subparsers.add_parser(
         "backfill",
