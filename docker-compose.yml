@@ -1,6 +1,8 @@
 services:
   warehouse:
     image: postgres:18
+    networks:
+      - weatherflow
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -21,6 +23,8 @@ services:
 
   pipeline:
     build: .
+    networks:
+      - weatherflow
     env_file:
       - .env
     environment:
@@ -34,3 +38,7 @@ services:
 
 volumes:
   pgdata:
+
+networks:
+  weatherflow:
+    name: weatherflow

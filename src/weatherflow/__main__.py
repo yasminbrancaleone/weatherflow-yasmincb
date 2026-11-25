@@ -3,6 +3,7 @@ import logging
 from collections.abc import Sequence
 from datetime import date, timedelta
 
+from .alerts import check_risk_alerts
 from .pipeline import run as run_pipeline, run_backfill
 
 
@@ -33,6 +34,10 @@ def create_parser() -> argparse.ArgumentParser:
         choices=("open_meteo", "weatherapi", "all"),
         default="all",
         help="Weather source to run (default: all).",
+    )
+    subparsers.add_parser(
+        "alerts",
+        help="Check recent high-risk weather observations.",
     )
     backfill_parser = subparsers.add_parser(
         "backfill",
@@ -82,6 +87,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if arguments.command == "run":
         run_pipeline(source=arguments.source)
+        return 0
+
+    if arguments.command == "alerts":
+        check_risk_alerts()
         return 0
 
     if arguments.command == "backfill":

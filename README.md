@@ -25,6 +25,11 @@ weatherflow-yasmincb/
 ├── Dockerfile                 # Non-root Python pipeline image
 ├── .dockerignore              # Excludes secrets, local data, and development files
 ├── docker-compose.yml         # PostgreSQL warehouse and pipeline services
+├── orchestration/
+│   ├── dags/
+│   │   └── weatherflow_hourly.py
+│   ├── docker-compose.yaml    # Official Airflow 3.4.0 learning setup
+│   └── Dockerfile             # Airflow image with WeatherFlow installed
 ├── docs/
 │   ├── data_dictionary.md    # Fields, units, and dataset grain
 │   ├── reference_architecture.md
@@ -110,6 +115,45 @@ docker compose run --rm pipeline run --source weatherapi
 The container's exit code is returned to the calling shell. For example, a missing
 WeatherAPI key causes a non-zero exit code. Use `docker compose down` to stop the
 warehouse while retaining its named data volume.
+
+## Run the hourly Airflow DAG
+
+Airflow runs as a separate Docker Compose project with its own metadata database
+and Redis broker. The weather warehouse remains the separate `warehouse` service.
+Docker Desktop should have at least 4 GB of memory available.
+
+Create `orchestration/.env` from `orchestration/.env.example` if it does not exist:
+
+```powershell
+if (-not (Test-Path orchestration/.env)) {
+    Copy-Item orchestration/.env.example orchestration/.env
+}
+```
+
+Set a local WeatherAPI key and PostgreSQL credentials in the root `.env` as in the
+Docker setup above. Start the warehouse first so it creates the shared `weatherflow`
+network, then build and initialize Airflow:
+
+```powershell
+docker compose up -d warehouse
+docker compose --env-file .env --env-file orchestration/.env -f orchestration/docker-compose.yaml build
+docker compose --env-file .env --env-file orchestration/.env -f orchestration/docker-compose.yaml up airflow-init
+docker compose --env-file .env --env-file orchestration/.env -f orchestration/docker-compose.yaml up -d
+```
+
+The DAG is in [`orchestration/dags/weatherflow_hourly.py`](orchestration/dags/weatherflow_hourly.py)
+and runs both sources hourly before checking recent high-risk observations. Open
+<http://localhost:8080> and unpause `weatherflow_hourly`; the local Airflow quick
+start uses `airflow` / `airflow` for its UI login. Source tasks run in Airflow's
+worker, where `WEATHERAPI_KEY` and the warehouse `DATABASE_URL` are passed from
+the root `.env`. A task failure is retried twice, then logged by the failure
+callback. The local Airflow Compose setup is for learning, not production.
+
+Stop only the Airflow project with:
+
+```powershell
+docker compose --env-file .env --env-file orchestration/.env -f orchestration/docker-compose.yaml down
+```
 
 ## Run Tests
 
