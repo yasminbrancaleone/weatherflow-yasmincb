@@ -7,3 +7,9 @@ data/
 .ipynb_checkpoints/
 *.egg-info/
 docs/dq_reports/
+orchestration/logs/*
+!orchestration/logs/.gitkeep
+orchestration/plugins/*
+!orchestration/plugins/.gitkeep
+orchestration/config/*
+!orchestration/config/.gitkeep
