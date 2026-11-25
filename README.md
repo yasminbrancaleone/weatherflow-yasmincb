@@ -32,18 +32,25 @@ weatherflow-yasmincb/
 │   │   └── weatherflow_hourly.py
 │   ├── docker-compose.yaml    # Official Airflow 3.4.0 learning setup
 │   └── Dockerfile             # Airflow image with WeatherFlow installed
+├── dashboard/
+│   └── app.py                 # Streamlit warehouse dashboard
 ├── docs/
+│   ├── adr/                   # Architecture decision records
 │   ├── data_dictionary.md    # Fields, units, and dataset grain
 │   ├── reference_architecture.md
 │   ├── reference_critique.md
 │   └── reflections/
-│       └── week_1.md         # Week 1 learning reflection
+│       ├── week_1.md
+│       ├── week_2.md
+│       └── week_3.md
 ├── src/weatherflow/          # Installable WeatherFlow package
 │   ├── config.py
 │   ├── extract.py
 │   ├── transform.py
 │   ├── load.py
 │   ├── output.py
+│   ├── alerts.py
+│   ├── dashboard_data.py
 │   └── pipeline.py
 ├── notebooks/01_explore.ipynb # Exploration and profiling of raw data
 ├── sql/
@@ -146,18 +153,48 @@ docker compose --env-file .env --env-file orchestration/.env -f orchestration/do
 ```
 
 The DAG is in [`orchestration/dags/weatherflow_hourly.py`](orchestration/dags/weatherflow_hourly.py)
-and runs both sources hourly before checking recent high-risk observations. Open
+and runs both sources hourly before checking high-risk forecasts for the next 12 hours. Open
 <http://localhost:8080> and unpause `weatherflow_hourly`; the local Airflow quick
 start uses `airflow` / `airflow` for its UI login. Source tasks run in Airflow's
 worker, where `WEATHERAPI_KEY` and the warehouse `DATABASE_URL` are passed from
-the root `.env`. A task failure is retried twice, then logged by the failure
-callback. The local Airflow Compose setup is for learning, not production.
+the root `.env`. The scheduler and worker share the `weatherflow` network with
+the warehouse. A task failure is retried twice, then recorded in the `alerts`
+table and application log by the failure callback. The local Airflow Compose
+setup is for learning, not production.
 
 Stop only the Airflow project with:
 
 ```powershell
 docker compose --env-file .env --env-file orchestration/.env -f orchestration/docker-compose.yaml down
 ```
+
+## Run the dashboard and alerts
+
+Start the PostgreSQL warehouse and load weather data using the Docker setup above.
+Install the optional dashboard dependency and launch Streamlit:
+
+```powershell
+python -m pip install -e ".[dashboard]"
+streamlit run dashboard/app.py
+```
+
+Open <http://localhost:8501>. The dashboard shows 24-hour risk by city and source,
+seven-day temperature and wind trends, source disagreements, UK-local display
+times, data freshness, and the latest available DQ report. Queries are cached
+for five minutes. `DATABASE_URL` must point to the running warehouse.
+
+Run risk alerts on demand with:
+
+```powershell
+python -m weatherflow alerts
+```
+
+Risk alerts cover the next 12 hours. With no webhook configured, risk and
+Airflow failure alerts are recorded in PostgreSQL's `alerts` table and the
+application log; `alerts_sent` prevents duplicate messages. The choice and
+trade-offs are recorded in [`docs/adr/0003-alert-channel-and-deduplication.md`](docs/adr/0003-alert-channel-and-deduplication.md).
+The other Week 3 decisions are in [`docs/adr/`](docs/adr/), and the reflection
+is in [`docs/reflections/week_3.md`](docs/reflections/week_3.md).
 
 ## Run Tests
 
@@ -242,6 +279,8 @@ the pipeline at least once before querying it.
 
 - [`notebooks/01_explore.ipynb`](notebooks/01_explore.ipynb) profiles and visualizes the raw hourly data.
 - [`docs/data_dictionary.md`](docs/data_dictionary.md) documents the explored dataset's columns and units.
+- [`docs/adr/`](docs/adr/) records the Week 3 architecture decisions.
+- [`docs/reflections/week_3.md`](docs/reflections/week_3.md) summarizes Week 3 work and validation limits.
 - [`src/weatherflow/reference/weatherapi_codes.csv`](src/weatherflow/reference/weatherapi_codes.csv) maps WeatherAPI condition codes to the project's weather categories.
 - [`sql/analysis_queries.sql`](sql/analysis_queries.sql) contains five PostgreSQL queries for data coverage, latest-date temperature, strongest winds, and weekday/weekend wind comparisons.
 
